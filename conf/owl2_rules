@@ -1,0 +1,50 @@
+3	(?a ?p ?c) :- (?p 0 10)@[owl-transitive-properties]@@(?a ?p ?b),(?b ?p ?c)
+3	(?y1 11 ?y2) :- (?p 0 7)@[owl-functional-properties]@@(?x ?p ?y1),(?x ?p ?y2)
+3	(?y1 11 ?y2) :- (?p 0 8)@[owl-inverse-functional-properties]@@(?y1 ?p ?x),(?y2 ?p ?x)
+2	(?u ?p ?y) :- (?x 15 ?y)@[owl-has-value],(?x 16 ?p)@[owl-on-properties],(?u 0 ?x)
+2	(?a ?p ?b) :- (?p1 4 ?p)@[rdfs-subproperties],(?a ?p1 ?b)
+2	(?x 0 ?b) :- (?a 5 ?b)@[rdfs-subclasses],(?x 0 ?a)
+1	(?a 4 ?c) :- (?a 4 ?b)@[rdfs-subproperties],(?b 4 ?c)@[rdfs-subproperties]
+1	(?p 4 ?p) :- (?p 0 41)@[owl-objtype-prop]
+1	(?c 5 34) :- (?c 0 6)@[owl-type-class]
+1	(?c 5 ?c) :- (?c 0 6)@[owl-type-class]
+1	(?p1 4 ?p2) :- (?p1 14 ?p2)@[owl-equivalence-properties+]
+1	(?p 14 ?p) :- (?p 0 41)@[owl-objtype-prop]
+1	(?p 14 ?p) :- (?p 0 40)@[owl-datatype-prop]
+1	(?p 4 ?p) :- (?p 0 40)@[owl-datatype-prop]
+1	(?p1 14 ?p2) :- (?p1 4 ?p2)@[rdfs-subproperties],(?p2 4 ?p1)@[rdfs-subproperties]
+1	(?a 5 ?c) :- (?a 5 ?b)@[rdfs-subclasses],(?b 5 ?c)@[rdfs-subclasses]
+1	(39 5 ?c) :- (?c 0 6)@[owl-type-class]
+1	(?c1 5 ?c2) :- (?c1 13 ?c2)@[owl-equivalence-classes+]
+1	(?c 13 ?c) :- (?c 0 6)@[owl-type-class]
+1	(?c1 13 ?c2) :- (?c1 5 ?c2)@[rdfs-subclasses],(?c2 5 ?c1)@[rdfs-subclasses]
+2	(?a 0 ?D) :- (?p 3 ?D)@[rdfs-domain],(?a ?p ?x)
+2	(?a 0 ?R) :- (?p 2 ?R)@[rdfs-range],(?x ?p ?a)
+1	(?p 3 ?c) :- (?p 3 ?c1)@[rdfs-domain],(?c1 5 ?c)@[rdfs-subclasses]
+1	(?p 3 ?c) :- (?p1 3 ?c)@[rdfs-domain],(?p1 4 ?p)@[rdfs-subproperties]
+1	(?p 2 ?c) :- (?p 2 ?c1)@[rdfs-range],(?c1 5 ?c)@[rdfs-subclasses]
+1	(?p 2 ?c) :- (?p1 2 ?c)@[rdfs-range],(?p1 4 ?p)@[rdfs-subproperties]
+2	(?x 0 ?c1) :- (?c1 13 ?c2)@[owl-equivalence-classes+],(?x 0 ?c1)
+2	(?x ?p1 ?y) :- (?p1 14 ?p2)@[owl-equivalence-properties+],(?x ?p2 ?y)
+2	(?y ?p1 ?x) :- (?p1 12 ?p2)@[owl-inverse+],(?x ?p2 ?y)
+2	(?u 0 ?x) :- (?x 17 34)@[owl-some-values-from*],(?x 16 ?p)@[owl-on-properties],(?u ?p ?v)
+2	(?y ?p ?x) :- (?p 0 9)@[owl-symmetric-properties],(?x ?p ?y)
+2	(?u 0 ?x) :- (?x 15 ?y)@[owl-has-value],(?x 16 ?p)@[owl-on-properties],(?u ?p ?y)
+3	(?u 0 ?x) :- (?x 17 ?y)@[owl-some-values-from],(?x 16 ?p)@[owl-on-properties]@@(?u ?p ?v),(?v 0 ?y)
+3	(?v 0 ?y) :- (?x 18 ?y)@[owl-all-values-from],(?x 16 ?p)@[owl-on-properties]@@(?u ?p ?v),(?u 0 ?x)
+3	(?y1 11 ?y2) :- (?x 36 35)@[owl2-max-card],(?x 16 ?p)@[owl-on-properties]@@(?u ?p ?y1),(?u ?p ?y2),(?u 0 ?x)
+3	(?y1 11 ?y2) :- (?x 38 34)@[owl2-on-class*],(?x 37 35)@[owl2-max-q-card],(?x 16 ?p)@[owl-on-properties]@@(?u ?p ?y1),(?u ?p ?y2),(?u 0 ?x)
+3	(?y1 11 ?y2) :- (?x 37 35)@[owl2-max-q-card],(?x 16 ?p)@[owl-on-properties],(?x 38 ?c)@[owl2-on-class]@@(?u ?p ?y1),(?y1 0 ?c),(?y2 0 ?c),(?u ?p ?y2),(?u 0 ?x)
+1	(?c1 5 ?c2) :- (?c1 15 ?i)@[owl-has-value],(?c1 16 ?p1)@[owl-on-properties],(?c2 15 ?i)@[owl-has-value],(?c2 16 ?p2)@[owl-on-properties],(?p1 4 ?p2)@[rdfs-subproperties]
+1	(?c1 5 ?c2) :- (?c1 17 ?y1)@[owl-some-values-from],(?c1 16 ?p)@[owl-on-properties],(?c2 17 ?y1)@[owl-some-values-from],(?c2 16 ?p)@[owl-on-properties],(?y1 5 ?y2)@[rdfs-subclasses]
+1	(?c1 5 ?c2) :- (?c1 17 ?y)@[owl-some-values-from],(?c1 16 ?p1)@[owl-on-properties],(?c2 17 ?y)@[owl-some-values-from],(?c2 16 ?p2)@[owl-on-properties],(?p1 4 ?p2)@[rdfs-subproperties]
+1	(?c1 5 ?c2) :- (?c1 18 ?y)@[owl-all-values-from],(?c1 16 ?p1)@[owl-on-properties],(?c2 18 ?y)@[owl-all-values-from],(?c2 16 ?p2)@[owl-on-properties],(?p1 4 ?p2)@[rdfs-subproperties]
+1	(?c1 5 ?c2) :- (?c1 18 ?y1)@[owl-all-values-from],(?c1 16 ?p)@[owl-on-properties],(?c2 16 ?p)@[owl-on-properties],(?c2 18 ?y2)@[owl-all-values-from],(?y1 5 ?y2)@[rdfs-subclasses]
+4	(?u_0 ?p ?u_n+1) :- (?p 29 ?listhead)@[owl2-props-axioms]@@(?listhead)@[owl2-props-axioms-list]@@(?u_n ?el_n ?u_n+1)
+4	(?x 11 ?y) :- (?c 30 ?listhead)@[owl2-has-key]@@(?listhead)@[owl2-has-key-list]@@(?x 0 ?c),(?y 0 ?c),(?x ?el_n ?z_n),(?y ?el_n ?z_n)
+4	(?y 0 ?c) :- (?c 32 ?listhead)@[owl2-union-of]@@(?listhead)@[owl2-union-of-list]@@(?y 0 ?listhead)
+4	(?listhead 0 ?c) :- (?c 33 ?listhead)@[owl2-one-of]@@(?listhead)@[owl2-one-of-list]
+4	(?c 5 ?listhead) :- (?c 31 ?listhead)@[owl2-intersection-of]@@(?listhead)@[owl2-intersection-of-list]
+4	(?listhead 5 ?c) :- (?c 32 ?listhead)@[owl2-union-of]@@(?listhead)@[owl2-union-of-list]
+4	(?y 0 ?c) :- (?c 31 ?listhead)@[owl2-intersection-of]@@(?listhead)@[owl2-intersection-of-list]@@(?y 0 ?el_n)
+4	(?y 0 ?listhead) :- (?c 31 ?listhead)@[owl2-intersection-of]@@(?listhead)@[owl2-intersection-of-list]@@(?y 0 ?c)

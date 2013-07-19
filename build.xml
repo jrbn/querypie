@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<project name="querypie" default="jar" basedir=".">
+
+	<property name="BUILD_PATH" value="bin" />
+	<property name="SRC_PATH" value="src" />
+	<property name="LIB_PATH" value="lib" />
+	<property name="CONF_PATH" value="conf" />
+	<property name="JAR_LOCATION" value="querypie.jar" />
+
+	<property name="JAR_REMOTE_LOCATION" value="" />
+	<property name="SCP_PRIVATE_KEY" value="" />
+	<property name="SCP_PASSPHRASE" value="" />
+
+	<target name="clean">
+		<delete dir="${BUILD_PATH}" />
+	</target>
+
+	<target name="init" depends="clean">
+		<mkdir dir="${BUILD_PATH}" />
+	</target>
+
+	<target name="compile" depends="init" description="">
+		<javac srcdir="${SRC_PATH}" destdir="${BUILD_PATH}" debug="true">
+			<classpath>
+				<fileset dir="${LIB_PATH}">
+					<include name="**/*.jar" />
+				</fileset>
+				<fileset dir="javagat">
+					<include name="*.jar" />
+				</fileset>
+			</classpath>
+		</javac>
+	</target>
+
+	<target name="jar" depends="compile">
+		<jar destfile="${JAR_LOCATION}" basedir="${BUILD_PATH}">
+		</jar>
+	</target>
+</project>
