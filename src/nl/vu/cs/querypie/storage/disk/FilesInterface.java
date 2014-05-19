@@ -7,11 +7,10 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.RandomAccessFile;
 
+import nl.vu.cs.ajira.utils.Configuration;
 import nl.vu.cs.querypie.utils.Utils;
 
 import org.apache.commons.io.FileUtils;
-
-import arch.utils.Configuration;
 
 public class FilesInterface {
 

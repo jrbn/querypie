@@ -3,8 +3,8 @@ package nl.vu.cs.querypie.storage.memory;
 import java.util.ArrayList;
 import java.util.Arrays;
 
-
-import arch.utils.LongMap;
+import nl.vu.cs.ajira.utils.LongMap;
+import nl.vu.cs.ajira.utils.LongMap.Entry;
 
 public class ComprSingleTupleMap implements TupleMap {
 
@@ -13,7 +13,7 @@ public class ComprSingleTupleMap implements TupleMap {
     int sizeSingleTuple = -1;
 
     public ComprSingleTupleMap(SingleTupleMap orig) {
-	arch.utils.LongMap.Entry<CollectionTuples>[] table = orig.getTable();
+	Entry<CollectionTuples>[] table = orig.getTable();
 
 	// Fill the table with the hashcodes
 	this.table = new int[table.length];
@@ -21,7 +21,7 @@ public class ComprSingleTupleMap implements TupleMap {
 
 	ArrayList<Long> values = new ArrayList<Long>();
 
-	for (arch.utils.LongMap.Entry<CollectionTuples> entry : table) {
+	for (Entry<CollectionTuples> entry : table) {
 	    if (entry != null) {
 		int hash = -1;
 		int pos = values.size();
@@ -70,6 +70,7 @@ public class ComprSingleTupleMap implements TupleMap {
 	return getLong(key);
     }
 
+    @Override
     public CollectionTuples getLong(long key) {
 	int hash = LongMap.hash(key);
 

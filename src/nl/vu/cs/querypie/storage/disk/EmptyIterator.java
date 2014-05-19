@@ -1,9 +1,10 @@
 package nl.vu.cs.querypie.storage.disk;
 
-import arch.data.types.Tuple;
-import arch.datalayer.TupleIterator;
+import nl.vu.cs.ajira.data.types.Tuple;
+import nl.vu.cs.ajira.datalayer.TupleIterator;
+import nl.vu.cs.querypie.storage.TripleIterator;
 
-public class EmptyIterator extends TupleIterator {
+public class EmptyIterator extends TupleIterator implements TripleIterator {
 
     @Override
     public boolean next() throws Exception {
@@ -18,4 +19,13 @@ public class EmptyIterator extends TupleIterator {
     public boolean isReady() {
 	return true;
     }
+
+	@Override
+	public long estimateRecords() throws Exception {
+		return 0;
+	}
+
+	@Override
+	public void stopReading() {	
+	}
 }

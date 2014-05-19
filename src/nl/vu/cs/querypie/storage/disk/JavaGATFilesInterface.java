@@ -9,11 +9,10 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
 
+import nl.vu.cs.ajira.utils.Configuration;
 import nl.vu.cs.querypie.utils.Utils;
 
 import org.gridlab.gat.GAT;
-
-import arch.utils.Configuration;
 
 public class JavaGATFilesInterface extends FilesInterface {
 

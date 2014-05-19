@@ -14,6 +14,9 @@ import java.util.Map;
 import java.util.Set;
 import java.util.zip.GZIPInputStream;
 
+import nl.vu.cs.ajira.Context;
+import nl.vu.cs.ajira.actions.ActionContext;
+import nl.vu.cs.ajira.utils.Configuration;
 import nl.vu.cs.querypie.reasoner.Pattern;
 import nl.vu.cs.querypie.storage.disk.FilesInterface;
 import nl.vu.cs.querypie.storage.disk.TripleFile;
@@ -24,10 +27,6 @@ import nl.vu.cs.querypie.storage.memory.TupleSet;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import arch.ActionContext;
-import arch.Context;
-import arch.utils.Configuration;
-
 public class Schema {
 
     static final Logger log = LoggerFactory.getLogger(Schema.class);
@@ -37,6 +36,7 @@ public class Schema {
     public static final int SCHEMA_SUBSET = -2;
     public static final int ANY_RESOURCES = -3;
     public static final int SET_THRESHOLD = -4;
+    public static final int CLOSURE_BROADCASTFLAG = -5;
 
     String closureDir = null;
     FilesInterface fi = null;
@@ -193,9 +193,9 @@ public class Schema {
 	return id;
     }
 
-    public boolean chekValueInSet(RDFTerm idSet, long value,
+    public boolean chekValueInSet(long idSet, long value,
 	    ActionContext context) {
-	Collection<Long> col = getSubset(idSet.getValue(), context);
+	Collection<Long> col = getSubset(idSet, context);
 	return col.contains(value);
     }
 

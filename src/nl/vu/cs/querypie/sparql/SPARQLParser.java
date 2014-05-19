@@ -5,6 +5,13 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import nl.vu.cs.ajira.actions.Action;
+import nl.vu.cs.ajira.actions.ActionContext;
+import nl.vu.cs.ajira.actions.ActionOutput;
+import nl.vu.cs.ajira.data.types.TLong;
+import nl.vu.cs.ajira.data.types.TString;
+import nl.vu.cs.ajira.data.types.Tuple;
+import nl.vu.cs.ajira.datalayer.InputLayer;
 import nl.vu.cs.querypie.storage.disk.RDFStorage;
 
 import org.openrdf.model.impl.LiteralImpl;
@@ -15,47 +22,34 @@ import org.openrdf.query.parser.ParsedQuery;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import arch.ActionContext;
-import arch.actions.Action;
-import arch.chains.Chain;
-import arch.data.types.TLong;
-import arch.data.types.TString;
-import arch.data.types.Tuple;
-import arch.storage.container.WritableContainer;
-
 public class SPARQLParser extends Action {
 
     static final Logger log = LoggerFactory.getLogger(SPARQLParser.class);
 
     @Override
-    public Chain apply(ActionContext context, Tuple tuple, Chain chain,
-	    WritableContainer<Chain> chainsToResolve,
-	    WritableContainer<Chain> chainsToSend) throws Exception {
-	chain.addAction(this, null, (Object[]) null);
-	return chain;
-    }
-
-    @Override
-    public void process(Tuple inputTuple, Chain remainingChain,
-	    // Action[] actionsInChain, int indexAction,
-	    WritableContainer<Chain> chainsToResolve,
-	    WritableContainer<Chain> chainsToProcess, WritableContainer<Tuple> output, ActionContext context)
-	    throws Exception {
+    public void process(Tuple inputTuple, ActionContext context,
+	    ActionOutput output) throws Exception {
 	try {
-	    TString tquery = new TString();
-	    inputTuple.get(tquery, 0);
+	    TString tquery = (TString) inputTuple.get(0);
 	    String query = tquery.getValue();
 	    org.openrdf.query.parser.sparql.SPARQLParser parser = new org.openrdf.query.parser.sparql.SPARQLParser();
 	    ParsedQuery q = parser.parseQuery(query, "http://www.vu.nl/");
 
+            if (log.isDebugEnabled()) {
+                log.debug("ParsedQuery = " + q);
+            }   
+
 	    TupleExpr expr = q.getTupleExpr();
+            if (log.isDebugEnabled()) {
+                log.debug("TupleExpr = " + expr);
+            }
 
 	    List<StatementPattern> list = new ArrayList<StatementPattern>();
 	    expr.visit(new QueryVisitor(list));
 
 	    // Replace URIs with the numbers from the dictionary table
-	    Map<String, Long> map = ((RDFStorage) context.getInputLayer(0))
-		    .getCacheURLs();
+	    Map<String, Long> map = ((RDFStorage) context.getContext()
+		    .getInputLayer(InputLayer.DEFAULT_LAYER)).getCacheURLs();
 
 	    for (StatementPattern sp : list) {
 		// log.debug("SP: " + sp);
@@ -111,6 +105,9 @@ public class SPARQLParser extends Action {
 		    }
 		    serializedJoin[i * 3 + 2] = maps.get(var.getName());
 		}
+                if (log.isInfoEnabled()) {
+                    log.info("line: " + serializedJoin[i * 3] + ", " + serializedJoin[i * 3 + 1] + ", " + serializedJoin[i * 3 + 2]);
+                }
 		++i;
 	    }
 
@@ -122,7 +119,7 @@ public class SPARQLParser extends Action {
 	    }
 
 	    inputTuple.set(serializedList);
-	    output.add(inputTuple);
+	    output.output(inputTuple);
 	} catch (Exception e) {
 	    log.error("Error", e);
 	}

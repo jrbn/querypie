@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
 
+import nl.vu.cs.ajira.utils.Configuration;
 import nl.vu.cs.querypie.reasoner.Pattern;
 import nl.vu.cs.querypie.storage.RDFTerm;
 import nl.vu.cs.querypie.storage.Schema;
@@ -15,9 +16,7 @@ import nl.vu.cs.querypie.storage.disk.TripleFile;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import arch.utils.Configuration;
-
-public class Utils extends arch.utils.Utils {
+public class Utils extends nl.vu.cs.ajira.utils.Utils {
 
     static final Logger log = LoggerFactory.getLogger(Utils.class);
 

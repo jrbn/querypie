@@ -1,0 +1,9 @@
+#!/bin/sh
+
+JARS=""
+for JAR in `find ../../arch/lib -name *.jar`
+do
+JARS="$JARS:$JAR"
+done
+
+java -Xmx2GB -cp ../conf:$JARS:../../arch/arch.jar:../querypie.jar -Dibis.server.address=localhost -Dibis.pool.name=querypie nl.vu.cs.querypie.Query $*

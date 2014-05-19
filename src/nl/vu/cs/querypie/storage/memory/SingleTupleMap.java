@@ -1,6 +1,6 @@
 package nl.vu.cs.querypie.storage.memory;
 
-import arch.utils.LongMap;
+import nl.vu.cs.ajira.utils.LongMap;
 
 public class SingleTupleMap extends LongMap<CollectionTuples> implements
 	TupleMap {

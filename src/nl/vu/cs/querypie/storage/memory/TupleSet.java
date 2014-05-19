@@ -1,6 +1,6 @@
 package nl.vu.cs.querypie.storage.memory;
 
-import ibis.smartsockets.util.ThreadPool;
+import ibis.util.ThreadPool;
 
 import java.util.ArrayList;
 import java.util.Arrays;

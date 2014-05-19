@@ -1,0 +1,21 @@
+PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
+		PREFIX gene: <http://linkedlifedata.com/resource/entrezgene/>
+		PREFIX core: <http://purl.uniprot.org/core/>
+		PREFIX biopax2: <http://www.biopax.org/release/biopax-level2.owl#>
+		PREFIX lifeskim: <http://linkedlifedata.com/resource/lifeskim/>
+		PREFIX umls: <http://linkedlifedata.com/resource/umls/>
+		PREFIX pubmed: <http://linkedlifedata.com/resource/pubmed/>
+
+		SELECT distinct ?genedescription ?prefLabel
+		WHERE {
+			?p biopax2:PHYSICAL-ENTITY ?protein .
+			?protein skos:exactMatch ?uniprotaccession .
+			?uniprotaccession core:organism <http://purl.uniprot.org/taxonomy/9606> .
+			?geneid gene:uniprotAccession ?uniprotaccession .
+			?geneid gene:description ?genedescription .
+			?geneid gene:pubmed ?pmid .
+			?geneid gene:chromosome 'Y' .
+			?pmid lifeskim:mentions ?umlsid .
+			?umlsid skos:prefLabel 'Polymorphism' .
+			?umlsid skos:prefLabel ?prefLabel .
+		}

@@ -2,14 +2,13 @@ package nl.vu.cs.querypie.utils;
 
 import java.io.File;
 
+import nl.vu.cs.ajira.utils.Configuration;
 import nl.vu.cs.querypie.storage.disk.FilesInterface;
+import nl.vu.cs.querypie.storage.disk.PlainTripleFile;
 import nl.vu.cs.querypie.storage.disk.TripleFile;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import arch.utils.Configuration;
-import arch.utils.Consts;
 
 public class FirstElementsListCreator {
 
@@ -31,8 +30,8 @@ public class FirstElementsListCreator {
 	    System.exit(1);
 	}
 	Configuration conf = new Configuration();
-	conf.set(Consts.STORAGE_IMPL, "reasoner.storagelayer.RDFStorage");
-	conf.set("indexFileImpl", "reasoner.storagelayer.PlainTripleFile");
+	// conf.set(Consts.STORAGE_IMPL, RDFStorage.class.getName());
+	conf.set("indexFileImpl", PlainTripleFile.class.getName());
 	runOnIndex(conf, args[0] + File.separator + "index" + File.separator
 		+ "spo");
 	runOnIndex(conf, args[0] + File.separator + "index" + File.separator

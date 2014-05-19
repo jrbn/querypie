@@ -5,6 +5,9 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
+import nl.vu.cs.ajira.actions.ActionContext;
+import nl.vu.cs.ajira.actions.ActionOutput;
+import nl.vu.cs.ajira.data.types.Tuple;
 import nl.vu.cs.querypie.reasoner.Pattern;
 import nl.vu.cs.querypie.reasoner.rules.Rule2;
 import nl.vu.cs.querypie.reasoner.rules.Rule2.GenericVars;
@@ -22,11 +25,6 @@ import nl.vu.cs.querypie.storage.memory.tuplewrapper.TupleWrapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import arch.ActionContext;
-import arch.chains.Chain;
-import arch.data.types.Tuple;
-import arch.storage.container.WritableContainer;
-
 public class RuleExecutor2 extends RuleExecutor1 {
 
     static final Logger log = LoggerFactory.getLogger(RuleExecutor2.class);
@@ -36,7 +34,8 @@ public class RuleExecutor2 extends RuleExecutor1 {
     protected GenericVars g;
 
     /***** DATA STRUCTURES USED FOR STRATIFICATION *****/
-    protected RDFTerm[] triple2 = { new RDFTerm(), new RDFTerm(), new RDFTerm() };
+    // protected RDFTerm[] triple2 = { new RDFTerm(), new RDFTerm(), new
+    // RDFTerm() };
     // private boolean first;
     // private InMemoryTripleContainer triples_derived_prev_cycle = null;
     // private boolean check_stratification;
@@ -55,8 +54,7 @@ public class RuleExecutor2 extends RuleExecutor1 {
     private final Mapping[] vars_others_output = new Mapping[3];
     private boolean should_redo_join;
 
-    protected SimpleDataTupleWrapper tw = new SimpleDataTupleWrapper(
-	    new RDFTerm());
+    protected SimpleDataTupleWrapper tw = new SimpleDataTupleWrapper();
     private final RDFTermTupleWrapper wrapper = new RDFTermTupleWrapper();
 
     /***** DATA STRUCTURES USED FOR REMOVE THE DUPLICATES *****/
@@ -259,10 +257,9 @@ public class RuleExecutor2 extends RuleExecutor1 {
     }
 
     @Override
-    public void startProcess(ActionContext context, Chain chain,
-	    Object... params) throws Exception {
+    public void startProcess(ActionContext context) throws Exception {
 	// Get rule definition
-	ruleDef = ruleset.getRuleSecondType((Integer) params[6]);
+	ruleDef = ruleset.getRuleSecondType(getParamInt(I_RULEDEF));
 
 	// context.incrCounter("rule-" + ruleDef.type + "-" + ruleDef.id, 1);
 
@@ -271,7 +268,7 @@ public class RuleExecutor2 extends RuleExecutor1 {
 
 	// Instantiate the output
 	for (int i = 0; i < 3; ++i) {
-	    instantiated_head[i].setValue((Long) params[i]);
+	    instantiated_head[i].setValue(getParamLong(i));
 	    triple[i].setValue(ruleDef.HEAD.p[i].getValue());
 	}
 
@@ -282,18 +279,15 @@ public class RuleExecutor2 extends RuleExecutor1 {
     }
 
     @Override
-    public void process(Tuple inputTuple, Chain remainingChain,
-	    WritableContainer<Chain> chainsToResolve,
-	    WritableContainer<Chain> chainsToProcess,
-	    WritableContainer<Tuple> output, ActionContext context)
-	    throws Exception {
+    public void process(Tuple inputTuple, ActionContext context,
+	    ActionOutput output) throws Exception {
 	tw.tuple = inputTuple;
 	duplicates.clear();
 	doJoin(tw, output, duplicates);
 	duplicates.clear();
     }
 
-    protected void doJoin(TupleWrapper t, WritableContainer<Tuple> output,
+    protected void doJoin(TupleWrapper t, ActionOutput output,
 	    Set<MultiValue> existingValues) throws Exception {
 
 	for (int i = 0; i < n_vars_gen_output; ++i) {

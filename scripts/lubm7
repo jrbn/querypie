@@ -1,0 +1,15 @@
+#!/bin/sh
+case X$1 in
+    X)
+	line=`grep "won election" ns.out | tail -1`
+	pool=`expr "$line" : '.*pool "\(.*\)".*'`
+	;;
+    *)
+	pool=$1
+	;;
+esac
+
+echo Querying cluster running as pool $pool:
+
+./query $pool --nResults 20 --rules --sparql ../queries/lubm7.sparql
+

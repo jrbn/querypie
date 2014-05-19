@@ -1,12 +1,5 @@
 package nl.vu.cs.querypie;
 
-import ibis.ipl.Ibis;
-import ibis.ipl.IbisFactory;
-import ibis.ipl.IbisIdentifier;
-import ibis.ipl.ReceivePort;
-import ibis.ipl.SendPort;
-import ibis.ipl.WriteMessage;
-
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
@@ -14,381 +7,364 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.net.Socket;
+import java.util.ArrayList;
 
+import nl.vu.cs.ajira.AjiraClient;
+import nl.vu.cs.ajira.actions.ActionConf;
+import nl.vu.cs.ajira.actions.ActionFactory;
+import nl.vu.cs.ajira.actions.ActionSequence;
+import nl.vu.cs.ajira.actions.CollectToNode;
+import nl.vu.cs.ajira.actions.QueryInputLayer;
+import nl.vu.cs.ajira.actions.WriteToBucket;
+import nl.vu.cs.ajira.data.types.SimpleData;
+import nl.vu.cs.ajira.data.types.TBoolean;
+import nl.vu.cs.ajira.data.types.TString;
+import nl.vu.cs.ajira.data.types.Tuple;
+import nl.vu.cs.ajira.data.types.TupleFactory;
+import nl.vu.cs.ajira.datalayer.dummy.DummyLayer;
+import nl.vu.cs.ajira.exceptions.JobFailedException;
+import nl.vu.cs.ajira.submissions.Job;
+import nl.vu.cs.ajira.submissions.JobProperties;
+import nl.vu.cs.querypie.reasoner.CalculateClosure;
+import nl.vu.cs.querypie.reasoner.QSQBCAlgo;
+import nl.vu.cs.querypie.reasoner.ReasoningUtils;
 import nl.vu.cs.querypie.reasoner.RuleBCAlgo;
-import nl.vu.cs.querypie.reasoner.RuleGetPattern;
-import nl.vu.cs.querypie.reasoner.rules.executors.TreeExpander;
-import nl.vu.cs.querypie.sparql.SPARQLExecutorHashJoin;
+import nl.vu.cs.querypie.reasoning.expand.TreeExpander;
 import nl.vu.cs.querypie.sparql.SPARQLParser;
+import nl.vu.cs.querypie.sparql.SPARQLPrintOutput;
+import nl.vu.cs.querypie.sparql.SPARQLQueryExecutor;
+import nl.vu.cs.querypie.sparql.SPARQLQueryOptimizer;
 import nl.vu.cs.querypie.storage.RDFTerm;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import arch.actions.PutIntoBucket;
-import arch.actions.SendTo;
-import arch.data.types.DataProvider;
-import arch.data.types.SimpleData;
-import arch.data.types.TBoolean;
-import arch.data.types.TInt;
-import arch.data.types.TString;
-import arch.data.types.Tuple;
-import arch.net.NetworkLayer;
-import arch.net.ReadMessageWrapper;
-import arch.net.WriteMessageWrapper;
-import arch.storage.container.WritableContainer;
-import arch.submissions.JobDescriptor;
-import arch.utils.Consts;
-
 public class Query {
 
-    static final Logger log = LoggerFactory.getLogger(Query.class);
+	static final Logger log = LoggerFactory.getLogger(Query.class);
 
-    boolean excludeExplicit = false;
+	boolean excludeExplicit = false;
 
-    int nDisplayResults = 10;
-    int displayedResults = 0;
-    boolean dictionary = false;
-    public boolean intermediateStats = false;
-    public String dictionaryHost;
-    Socket connection = null;
-    String fileSparqlQuery = null;
-    String inputPattern = null;
-    String closurePath = null;
-    boolean closure = false;
-    boolean rules = false;
-    boolean incomplete = false;
+	int nDisplayResults = 10;
+	int displayedResults = 0;
+	boolean dictionary = false;
+	public boolean intermediateStats = false;
+	public String dictionaryHost;
+	Socket connection = null;
+	String fileSparqlQuery = null;
+	String inputPattern = null;
+	String closurePath = null;
+	boolean closure = false;
+	boolean rules = false;
+	boolean incomplete = false;
+	boolean qsq = false;
 
-    BufferedReader in;
-    PrintWriter out;
+	BufferedReader in;
+	PrintWriter out;
 
-    DataProvider dp;
+	private String cluster;
 
-    public String[] getText(SimpleData[] row) {
-	String[] answer = new String[row.length];
-	try {
+	public String[] getText(SimpleData[] row) {
+		String[] answer = new String[row.length];
+		try {
 
-	    if (connection == null) {
-		connection = new Socket(dictionaryHost, 4444);
-		out = new PrintWriter(connection.getOutputStream(), true);
-	    }
+			if (connection == null) {
+				connection = new Socket(dictionaryHost, 4444);
+				out = new PrintWriter(connection.getOutputStream(), true);
+			}
 
-	    String request = "";
-	    for (SimpleData value : row) {
-		request += " " + value.toString();
-	    }
-	    out.println(request.trim());
-	    in = new BufferedReader(new InputStreamReader(
-		    connection.getInputStream()));
-	    for (int i = 0; i < row.length; ++i) {
-		answer[i] = in.readLine();
-		if (answer[i].length() > 20) {
-		    answer[i] = "..."
-			    + answer[i].substring(answer[i].length() - 20,
-				    answer[i].length());
-		}
-	    }
-	} catch (Exception e) {
-	}
-
-	return answer;
-    }
-
-    Ibis ibis = null;
-    SendPort port = null;
-
-    private ReceivePort rp;
-
-    public ReadMessageWrapper getQueryResults(String query,
-	    boolean excludeExplicit, boolean waitForStatistics, boolean sparql,
-	    boolean rules) {
-	try {
-
-	    JobDescriptor job = new JobDescriptor();
-	    if (rules)
-		job.setAvailableRules(TreeExpander.class.getName());
-	    else
-		job.setAvailableRules(null);
-	    job.excludeExecutionMainChain(excludeExplicit);
-	    job.setWaitForStatistics(waitForStatistics);
-
-	    job.setAssignedOutputBucket(0); // Fetch the tuples from bucket 0
-
-	    if (closure) {
-		// Execute the closure
-		job.addAction(
-			nl.vu.cs.querypie.reasoner.CalculateClosure.class,
-			new Tuple(new TBoolean(incomplete)));
-
-		job.addAction(SendTo.class, new Tuple(new TString(SendTo.THIS),
-			new TBoolean(false), new TInt(0)));
-
-		job.setInputLayer(Consts.DUMMY_INPUT_LAYER_ID);
-		job.setInputTuple(new Tuple());
-
-	    } else if (!sparql) {
-		// Parse the input tuple
-		RDFTerm v1 = new RDFTerm();
-		RDFTerm v2 = new RDFTerm();
-		RDFTerm v3 = new RDFTerm();
-		String[] values = query.split(" ");
-		v1.setValue(Long.valueOf(values[0]));
-		v2.setValue(Long.valueOf(values[1]));
-		v3.setValue(Long.valueOf(values[2]));
-		Tuple t = new Tuple(v1, v2, v3);
-
-		job.setInputTuple(t);
-
-		if (rules) {
-		    if (!incomplete) {
-			job.addAction(RuleBCAlgo.class, t);
-		    } else {
-			job.addAction(RuleGetPattern.class, new Tuple(
-				new TBoolean(true)));
-		    }
+			String request = "";
+			for (SimpleData value : row) {
+				request += " " + value.toString();
+			}
+			out.println(request.trim());
+			in = new BufferedReader(new InputStreamReader(
+					connection.getInputStream()));
+			for (int i = 0; i < row.length; ++i) {
+				answer[i] = in.readLine();
+				if (answer[i].length() > 20) {
+					answer[i] = "..."
+							+ answer[i].substring(answer[i].length() - 20,
+									answer[i].length());
+				}
+			}
+		} catch (Exception e) {
 		}
 
-		job.addAction(PutIntoBucket.class, new Tuple(new TInt(0)));
-	    } else {
-		job.setPrintIntermediateStats(false);
-		job.addAction(SPARQLParser.class);
-		job.addAction(SPARQLExecutorHashJoin.class);
-
-		job.addAction(SendTo.class, new Tuple(new TString(SendTo.THIS),
-			new TBoolean(false), new TInt(0)));
-
-		job.setInputLayer(Consts.DUMMY_INPUT_LAYER_ID);
-		job.setInputTuple(new Tuple(new TString(query)));
-	    }
-
-	    job.setPrintIntermediateStats(intermediateStats);
-
-	    // Connect to the server
-	    if (ibis == null) {
-		ibis = IbisFactory.createIbis(NetworkLayer.ibisCapabilities,
-			null, NetworkLayer.queryPortType,
-			NetworkLayer.requestPortType,
-			NetworkLayer.mgmtRequestPortType);
-		IbisIdentifier server = ibis.registry().getElectionResult(
-			"server");
-		port = ibis.createSendPort(NetworkLayer.mgmtRequestPortType);
-		port.connect(server, NetworkLayer.nameMgmtReceiverPort);
-		rp = ibis.createReceivePort(NetworkLayer.queryPortType,
-			NetworkLayer.queryReceiverPort);
-		rp.enableConnections();
-	    }
-
-	    WriteMessage msg = port.newMessage();
-	    msg.writeByte((byte) 7);
-	    job.writeTo(new WriteMessageWrapper(msg));
-	    msg.finish();
-
-	    return new ReadMessageWrapper(rp.receive());
-
-	} catch (Exception e) {
-	    log.error("Error", e);
+		return answer;
 	}
 
-	return null;
-    }
+	public AjiraClient getQueryResults(String propertiesFile, String query,
+			boolean excludeExplicit, boolean waitForStatistics, boolean sparql,
+			boolean rules) {
 
-    public void query(String[] args) throws InterruptedException, IOException {
-	if (args.length == 1 && args[0].equals("--help")) {
-	    System.out
-		    .println("Usage: [-d dictionaryHost --excludeExplicit "
-			    + "--nResults 50 --rules <File with rules> "
-			    + "--incomplete --intermediateStats --sparql <File with sparql query> --pattern <pattern>]");
-	    return;
-	}
+		try {
 
-	for (int i = 0; i < args.length; ++i) {
+			Job job = new Job();
 
-	    if (args[i].equals("-d")) {
-		dictionary = true;
-		dictionaryHost = args[++i];
-	    }
+			if (rules) {
+				JobProperties properties = new JobProperties();
+				properties.putProperty("availableRules",
+						TreeExpander.class.getName());
+				job.setProperties(properties);
+			}
 
-	    if (args[i].equals("--excludeExplicit")) {
-		excludeExplicit = true;
-	    }
+			ActionSequence actions = new ActionSequence();
+			if (closure) {
+				// Execute the closure
+				ActionConf c = ActionFactory
+						.getActionConf(QueryInputLayer.class);
+				c.setParamString(QueryInputLayer.S_INPUTLAYER,
+						DummyLayer.class.getName());
+				c.setParamWritable(QueryInputLayer.W_QUERY,
+						new nl.vu.cs.ajira.actions.support.Query());
+				actions.add(c);
 
-	    if (args[i].equals("--pattern")) {
-		inputPattern = args[++i] + " " + args[++i] + " " + args[++i];
-	    }
+				CalculateClosure.applyTo(null,
+						TupleFactory.newTuple(new TBoolean(incomplete)),
+						actions);
+			} else if (!sparql) {
+				// Parse the input tuple
+				String[] values = query.split(" ");
 
-	    if (args[i].equals("--incomplete")) {
-		incomplete = true;
-	    }
+				RDFTerm v1 = new RDFTerm();
+				RDFTerm v2 = new RDFTerm();
+				RDFTerm v3 = new RDFTerm();
+				v1.setValue(Long.valueOf(values[0]));
+				v2.setValue(Long.valueOf(values[1]));
+				v3.setValue(Long.valueOf(values[2]));
 
-	    if (args[i].equals("--intermediateStats")) {
-		intermediateStats = true;
-	    }
+				if (rules) {
+					if (!qsq) {
+						RuleBCAlgo.applyTo(v1, v2, v3, !excludeExplicit,
+								actions);
+					} else {
+						log.info("Using QSQ algorithm");
+						QSQBCAlgo.applyTo(v1, v2, v3, actions);
+					}
+				} else {
+					ReasoningUtils.getResultsQuery(actions,
+							TupleFactory.newTuple(v1, v2, v3), true);
+				}
 
-	    if (args[i].equals("--nResults")) {
-		nDisplayResults = Integer.valueOf(args[++i]);
-	    }
+				// Copy the results in a bucket
+				ActionConf c = ActionFactory.getActionConf(WriteToBucket.class);
+				c.setParamStringArray(WriteToBucket.SA_TUPLE_FIELDS,
+						RDFTerm.class.getName(), RDFTerm.class.getName(),
+						RDFTerm.class.getName());
+				c.setParamBoolean(WriteToBucket.B_OUTPUT_BUCKET_ID, false);
+				actions.add(c);
 
-	    if (args[i].equals("--rules")) {
-		rules = true;
-	    }
+			} else {
+				intermediateStats = false;
+				nl.vu.cs.ajira.actions.support.Query q = new nl.vu.cs.ajira.actions.support.Query(
+						new TString(query));
+				ActionConf c = ActionFactory
+						.getActionConf(QueryInputLayer.class);
+				c.setParamString(QueryInputLayer.S_INPUTLAYER,
+						DummyLayer.class.getName());
+				c.setParamWritable(QueryInputLayer.W_QUERY, q);
+				actions.add(c);
 
-	    if (args[i].equals("--closure")) {
-		closure = true;
-	    }
+				actions.add(ActionFactory.getActionConf(SPARQLParser.class));
 
-	    if (args[i].equals("--closurePath")) {
-		closurePath = args[++i];
-	    }
+				c = ActionFactory.getActionConf(SPARQLQueryOptimizer.class);
+				c.setParamInt(SPARQLQueryOptimizer.I_MAX_LEVELS, 2);
+				actions.add(c);
 
-	    if (args[i].equals("--sparql")) {
-		fileSparqlQuery = args[++i];
-	    }
-	}
+				if (qsq) {
+					log.info("Using QSQ algorithm");
+				}
+				c = ActionFactory.getActionConf(SPARQLQueryExecutor.class);
+				c.setParamBoolean(SPARQLQueryExecutor.B_QSQ, qsq);
+				actions.add(c);
 
-	new RDFTerm();
-	dp = new DataProvider();
+				actions.add(ActionFactory
+						.getActionConf(SPARQLPrintOutput.class));
 
-	// // Parse the rules to apply
-	// File fileRules = null;
-	// if (this.fileRules != null) {
-	// fileRules = new File(this.fileRules);
-	// }
+				c = ActionFactory.getActionConf(CollectToNode.class);
+				c.setParamStringArray(CollectToNode.SA_TUPLE_FIELDS,
+						TString.class.getName());
+				actions.add(c);
 
-	// Launch query
-	ReadMessageWrapper is = null;
-	if (!closure) {
-	    if (fileSparqlQuery == null) {
-		if (inputPattern == null) {
-		    System.out.println("Type triple pattern: ");
-		    inputPattern = new BufferedReader(new InputStreamReader(
-			    System.in)).readLine();
+				c = ActionFactory.getActionConf(WriteToBucket.class);
+				c.setParamStringArray(WriteToBucket.SA_TUPLE_FIELDS,
+						TString.class.getName());
+				c.setParamBoolean(WriteToBucket.B_OUTPUT_BUCKET_ID, false);
+				actions.add(c);
+			}
+
+			job.setPrintIntermediateStats(intermediateStats);
+			job.setPrintStatistics(true);
+			job.setActions(actions);
+
+			return new AjiraClient(propertiesFile, job);
+		} catch (Exception e) {
+			log.error("Error", e);
 		}
-		System.out
-			.println("Processing query " + inputPattern + " ... ");
-		is = getQueryResults(inputPattern, excludeExplicit, true,
-			false, rules);
-	    } else {
-		String sparqlQuery = "";
-		File file = new File(fileSparqlQuery);
-		if (file != null && file.exists()) {
-		    BufferedReader reader = new BufferedReader(new FileReader(
-			    file));
-		    String line = null;
-		    while ((line = reader.readLine()) != null) {
-			sparqlQuery += "\n" + line;
-		    }
-		    reader.close();
-		    log.info("Going to execute query:\n" + sparqlQuery);
+
+		return null;
+	}
+
+	public void query(String[] args) throws InterruptedException, IOException,
+			JobFailedException {
+		if (args.length == 1 && args[0].equals("--help")) {
+			System.out
+					.println("Usage: [-d dictionaryHost --excludeExplicit "
+							+ "--nResults 50 --rules <File with rules> "
+							+ "--incomplete --intermediateStats --sparql <File with sparql query> --pattern <pattern>]");
+			return;
+		}
+
+		for (int i = 0; i < args.length; ++i) {
+
+			if (args[i].equals("-d")) {
+				dictionary = true;
+				dictionaryHost = args[++i];
+			}
+
+			if (args[i].equals("-cluster")) {
+				cluster = args[++i];
+			}
+
+			if (args[i].equals("--excludeExplicit")) {
+				excludeExplicit = true;
+			}
+
+			if (args[i].equals("--qsq")) {
+				qsq = true;
+			}
+
+			if (args[i].equals("--pattern")) {
+				inputPattern = args[++i] + " " + args[++i] + " " + args[++i];
+			}
+
+			if (args[i].equals("--incomplete")) {
+				incomplete = true;
+			}
+
+			if (args[i].equals("--intermediateStats")) {
+				intermediateStats = true;
+			}
+
+			if (args[i].equals("--nResults")) {
+				nDisplayResults = Integer.valueOf(args[++i]);
+			}
+
+			if (args[i].equals("--rules")) {
+				rules = true;
+			}
+
+			if (args[i].equals("--closure")) {
+				closure = true;
+			}
+
+			if (args[i].equals("--closurePath")) {
+				closurePath = args[++i];
+			}
+
+			if (args[i].equals("--sparql")) {
+				fileSparqlQuery = args[++i];
+			}
+		}
+
+		if (!rules && excludeExplicit) {
+			System.out
+					.println("No rules is applied and explicit triples are excluded. The results can only be 0. Exiting...");
+			return;
+		}
+
+		// Launch query
+		AjiraClient client = null;
+		if (!closure) {
+			if (fileSparqlQuery == null) {
+				if (inputPattern == null) {
+					System.out.println("Type triple pattern: ");
+					inputPattern = new BufferedReader(new InputStreamReader(
+							System.in)).readLine();
+				}
+				System.out
+						.println("Processing query " + inputPattern + " ... ");
+				client = getQueryResults(cluster, inputPattern,
+						excludeExplicit, true, false, rules);
+			} else {
+				String sparqlQuery = "";
+				File file = new File(fileSparqlQuery);
+				if (file != null && file.exists()) {
+					BufferedReader reader = new BufferedReader(new FileReader(
+							file));
+					String line = null;
+					while ((line = reader.readLine()) != null) {
+						sparqlQuery += "\n" + line;
+					}
+					reader.close();
+					log.info("Going to execute query:\n" + sparqlQuery);
+				} else {
+					log.warn("SPARQL file " + file.getName()
+							+ " does not exist and will be ignored.");
+				}
+
+				client = getQueryResults(cluster, sparqlQuery, excludeExplicit,
+						true, true, rules);
+			}
 		} else {
-		    log.warn("SPARQL file " + file.getName()
-			    + " does not exist and will be ignored.");
+			client = getQueryResults(cluster, null, false, true, true, rules);
+		}
+		ArrayList<Tuple> tuples = new ArrayList<Tuple>();
+		boolean finished = client.getResult(tuples);
+		double time = client.getTime();
+		System.out.println("Time execution (ms) = " + time);
+		long ntuples = tuples.size();
+		displayedResults = 0;
+		processTuples(tuples);
+
+		while (!finished) {
+			// Get message and process more tuples
+			tuples.clear();
+			finished = client.getMoreResults(tuples);
+			ntuples += tuples.size();
+			processTuples(tuples);
 		}
 
-		is = getQueryResults(sparqlQuery, excludeExplicit, true, true,
-			rules);
-	    }
-	} else {
-	    is = getQueryResults(null, false, true, true, rules);
+		System.out.println("\n");
+		System.out.println("Triples = " + ntuples);
 	}
 
-	double time = is.readDouble();
-	System.out.println("Time execution (ms) = " + time);
-	WritableContainer<Tuple> tuples = new WritableContainer<Tuple>(
-		Consts.TUPLES_CONTAINER_BUFFER_SIZE);
-	tuples.readFrom(is);
-	long ntuples = tuples.getNElements();
-	boolean finished = is.readBoolean();
-	long key = -1;
-	if (!finished) {
-	    key = is.readLong();
-	}
-	displayedResults = 0;
-	processTuples(dp, tuples);
-	is.closeMessage();
+	public void processTuples(ArrayList<Tuple> tuples) {
+		SimpleData[] row = null;
 
-	while (!finished) {
-	    // Get message and process more tuples
-	    is = getMoreTuples(key);
-	    tuples.readFrom(is);
-	    ntuples += tuples.getNElements();
-	    processTuples(dp, tuples);
-	    finished = is.readBoolean();
-	    is.closeMessage();
-	}
+		try {
+			while (tuples.size() > 0 && displayedResults++ < nDisplayResults) {
+				Tuple tuple = tuples.remove(tuples.size() - 1);
+				if (row == null) {
+					row = new SimpleData[tuple.getNElements()];
+				}
+				for (int i = 0; i < row.length; ++i) {
+					row[i] = tuple.get(i);
+				}
 
-	System.out.println("\n");
-	System.out.println("Triples = " + ntuples);
-	closeIbis();
-    }
-
-    public ReadMessageWrapper getMoreTuples(long key) {
-	try {
-	    WriteMessage msg = port.newMessage();
-	    msg.writeByte((byte) 9);
-	    msg.writeLong(key);
-	    msg.finish();
-
-	    return new ReadMessageWrapper(rp.receive());
-
-	} catch (Exception e) {
-	    log.error("Error", e);
-	}
-	return null;
-    }
-
-    public void processTuples(DataProvider dp, WritableContainer<Tuple> tuples) {
-	Tuple tuple = new Tuple();
-	SimpleData[] row = null;
-
-	try {
-	    while (tuples.remove(tuple) && displayedResults++ < nDisplayResults) {
-		if (row == null) {
-		    row = new SimpleData[tuple.getNElements()];
-		    for (int i = 0; i < row.length; ++i) {
-			row[i] = dp.get(tuple.getType(i));
-		    }
+				if (dictionary) {
+					String[] values = getText(row);
+					String line = "";
+					for (int i = 0; i < row.length; ++i) {
+						line += values[i] + "(" + row[i].toString() + ") ";
+					}
+					System.out.println(line.trim());
+				} else {
+					String line = "";
+					for (SimpleData el : row) {
+						line += el.toString() + " ";
+					}
+					line = line.trim();
+					System.out.println(line);
+				}
+			}
+		} catch (Exception e) {
+			e.printStackTrace();
 		}
-
-		tuple.get(row);
-
-		if (dictionary) {
-		    String[] values = getText(row);
-		    String line = "";
-		    for (int i = 0; i < row.length; ++i) {
-			line += values[i] + "(" + row[i].toString() + ") ";
-		    }
-		    System.out.println(line.trim());
-		} else {
-		    String line = "";
-		    for (SimpleData el : row) {
-			line += el.toString() + " ";
-		    }
-		    line = line.trim();
-		    System.out.println(line);
-		}
-	    }
-
-	    if (row != null) {
-		for (SimpleData el : row) {
-		    dp.release(el);
-		}
-	    }
-	} catch (Exception e) {
-	    e.printStackTrace();
 	}
-    }
 
-    public void closeIbis() {
-	try {
-	    ibis.end();
-	} catch (Throwable e) {
-	    log.debug(
-		    "Ibis.end() gave exeception, but this is not fatal for a query",
-		    e);
+	public static void main(String[] args) throws Exception {
+		new Query().query(args);
 	}
-    }
-
-    public static void main(String[] args) throws Exception {
-	new Query().query(args);
-    }
 }
