@@ -1,9 +1,19 @@
-#!/bin/sh
+#!/bin/bash
 
-JARS=""
-for JAR in `find ../../arch/lib -name *.jar`
-do
-JARS="$JARS:$JAR"
-done
+cd `dirname $0`
 
-java -Xmx2GB -cp ../conf:$JARS:../../arch/arch.jar:../querypie.jar -Dibis.server.address=localhost -Dibis.pool.name=querypie nl.vu.cs.querypie.Query $*
+. ./init-env.sh
+
+case X$1 in
+    X)
+	line=`grep "won election" ns.out | tail -1`
+	pool=`expr "$line" : '.*pool "\(.*\)".*'`
+	;;
+    *)
+	pool=$1
+	;;
+esac
+
+export IBIS_OPTS="-Dibis.server.address=localhost:8011 -Dibis.pool.name=$pool"
+
+java $JAVA_OPTS $IBIS_OPTS nl.vu.cs.querypie.Query $*

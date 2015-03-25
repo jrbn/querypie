@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 case X$1 in
     X)
 	line=`grep "won election" ns.out | tail -1`
@@ -9,7 +9,6 @@ case X$1 in
 	;;
 esac
 
-echo Querying cluster running as pool $pool:
+echo computing closure with cluster running as pool $pool:
 
-./query $pool --nResults 20 --rules --sparql ../queries/lubm2.sparql
-
+./query $pool --rules --closure

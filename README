@@ -4,14 +4,11 @@ time (or better no time) to improve the code with proper documentation
 and/or examples. This means that your best reference is the code
 itself.
 
-* All this code is released under GPL v2. Please respect its terms if
+* All this code is released under Apache v2. Please respect its terms if
   you use for your own purposes.
 
-* Few external libraries are required to compile the code (I did not
-include them because I was not sure their licenses allowed me). These
-are: - SL4J logging (and whatever logging system you want to plug
-under) - elephant-bird - hadoop - commons-lang - commons-configuration
-- guava - protobuffer - commons-io - IBIS IPL library
+* to build querypie, you need ant. The easiest way, which packs (almost) everything
+  into a single jar, is to run "ant build-jar".
 
 * (Very minimal) guide to start the program:
 
@@ -19,25 +16,34 @@ under) - elephant-bird - hadoop - commons-lang - commons-configuration
   code. The code is available at http://github.com/jrbn/webpie class
   jobs.FilesImportTriples. See bit.ly/cFGtRQ for more info).
 
-- 2) Create the six indices with the webpie code. (See link before for
+- 2) Create the six indices with the webpie code. (See link above for
   more info. The class is jobs.CreateIndex).
 
-- 3) You must convert the hadoop files in normal files. The script
-  scripts/convertFilesHDFS should the job.
+- 3) You must convert the hadoop files to normal files. The script
+  scripts/convertHDFSFiles.sh should the job.
 
-- 4) Launch querypie with the class
-  nl.vu.cs.querypie.QueryPIE. Please, look at the code to understand
+- 4) Launch an ibis server:
+     cd scripts
+     ./ibis &
+
+- 5) Launch querypie with the class nl.vu.cs.querypie.QueryPIE.
+  Please, look at the code to understand
   which parameters are used for what. (notice that the program
   requires an instance of an ibis server running. See bit.ly/111FvV5
-  for more info).
+  for more info). The ibis server has been started in step 4.
+  A script "run-querypie" is provided in the scripts directory.
+  It takes a single argument: the directory containing the 6 indices.
 
-- 5) If you want to launch the closure, then there is a script in
-  scripts/ folder that should launch the appropriate program. Please,
-  read the code to see which parameters it requires.
+- 6) To launch the closure, use the script "compute-closure" in the
+  "scripts" folder to launch the appropriate program.
 
-- 6) If you want to query the knowledge base, then you should use the
+- 7) If you want to query the knowledge base, then you should use the
   program nl.vu.cs.querypie.Query. This program requires you pass a
   query with the numeric IDs instead of the URIs. If you need to
   retrieve this numbers from the original dataset, there is an Hadoop
   program that does this job. It is jobs.ExtractNumberDictionary (in
-  the webpie codebase).
+  the webpie codebase). Alternatively, you can pass a file containing
+  this mapping to querypie (see scripts/run-querypie on how to do that).
+  If you do that, you can use URIs in the queries.
+  
+
