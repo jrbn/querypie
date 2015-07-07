@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<project name="querypie" default="jar" basedir=".">
+
+	<property name="BUILD_PATH" value="bin" />
+	<property name="SRC_PATH" value="src" />
+	<property name="LIB_PATH" value="lib" />
+	<property name="CONF_PATH" value="conf" />
+	<property name="JAR_LOCATION" value="querypie.jar" />
+	<property name="FULL_JAR_LOCATION" value="querypie-full.jar" />
+
+	<property name="JAR_REMOTE_LOCATION" value="" />
+	<property name="SCP_PRIVATE_KEY" value="" />
+	<property name="SCP_PASSPHRASE" value="" />
+
+	<target name="clean">
+		<delete dir="${BUILD_PATH}" />
+	</target>
+
+	<target name="init" depends="clean">
+		<mkdir dir="${BUILD_PATH}" />
+	</target>
+
+	<target name="compile" depends="init" description="">
+		<javac srcdir="${SRC_PATH}" destdir="${BUILD_PATH}" debug="true">
+			<classpath>
+				<fileset dir="${LIB_PATH}">
+					<include name="**/*.jar" />
+				</fileset>
+				<fileset dir="javagat">
+					<include name="*.jar" />
+				</fileset>
+			</classpath>
+		</javac>
+	</target>
+
+	<target name="jar" depends="compile">
+		<jar destfile="${JAR_LOCATION}" basedir="${BUILD_PATH}">
+		</jar>
+	</target>
+
+	<property name="jar.dir" value="jar" />
+	<property name="depsjar.file" value="${jar.dir}/querypie-deps.jar" />
+	<property name="manifest.file" value="${jar.dir}/MANIFEST.MF" />
+
+
+    <!-- Build-jar target rule: creates a fat-jar/bundle by using 
+    jar-unjar-jar mechanism -->
+    <target name="build-jar" depends="compile">
+	<delete dir="${jar.dir}" />
+	<mkdir dir="${jar.dir}" />
+
+	<!-- Create manifest file with proejct specs inside -->
+	<manifest file="${manifest.file}" >
+	    <attribute name="built-by" value="${user.name}" />
+	    <attribute name="Class-Path" value="." />
+	</manifest>
+
+	<!-- Jar all the dependencies -->
+	<jar jarfile="${depsjar.file}">
+	    <zipgroupfileset dir="${LIB_PATH}" includes="**/*.jar" />
+	    <zipgroupfileset dir="javagat" includes="*.jar" />
+	</jar>
+
+	<!-- Wait for packaging -->
+	<sleep seconds="1" />
+
+	<!-- Unjar dependencies + clean signatures + jar the whole projects 
+	     as a fat-jar/bundle -->
+	<jar jarfile="${FULL_JAR_LOCATION}" basedir="${BUILD_PATH}" manifest="${manifest.file}">
+	    <zipfileset src="${depsjar.file}" excludes="META-INF/**/*" />
+	</jar>
+
+	<!-- Delete de dependecies jar -->
+	<delete dir="${jar.dir}" />
+    </target>
+</project>

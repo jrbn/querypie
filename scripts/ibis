@@ -1,0 +1,6 @@
+#!/bin/bash
+
+cd `dirname $0`
+. ./init-env.sh
+
+java $JAVA_OPTS -Dibis.registry.central.server.connect.timeout=60 ibis.ipl.server.Server --events --port 8011 > ns.out 2>&1

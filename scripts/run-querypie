@@ -1,0 +1,10 @@
+#!/bin/bash
+
+if [ $# -lt 1 ];
+then
+    echo "Usage: run-querypie <indexDir>" 1>&2
+    exit 1
+fi
+
+INDEXDIR="$1"
+./querypie.sh localhost:8011 "$INDEXDIR" --cacheURLs "$INDEXDIR"/../cacheURLs.txt

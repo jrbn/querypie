@@ -1,0 +1,14 @@
+PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+		PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
+		PREFIX biopax2: <http://www.biopax.org/release/biopax-level2.owl#>
+		PREFIX uniprot: <http://purl.uniprot.org/core/>
+
+		SELECT distinct ?protein_name
+		WHERE {
+			?interaction biopax2:PARTICIPANTS ?participant .
+			?participant biopax2:PHYSICAL-ENTITY ?physicalEntity .
+			?physicalEntity skos:exactMatch ?protein .
+			?protein uniprot:classifiedWith <http://purl.uniprot.org/go/0006954>.
+			?protein uniprot:recommendedName ?name .
+			?name uniprot:fullName ?protein_name .
+		}

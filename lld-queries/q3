@@ -1,0 +1,9 @@
+PREFIX biopax2: <http://www.biopax.org/release/biopax-level2.owl#>
+		PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+
+		SELECT ?interaction ?protein
+		WHERE {
+			?interaction biopax2:PARTICIPANTS ?p .
+			?p biopax2:PHYSICAL-ENTITY ?protein .
+			?protein biopax2:NAME "Phytochrome A"^^<xsd:string> .
+		}

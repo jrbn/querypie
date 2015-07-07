@@ -1,0 +1,13 @@
+PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+		PREFIX gene: <http://linkedlifedata.com/resource/entrezgene/>
+		PREFIX uniprot: <http://purl.uniprot.org/uniprot/core/>
+		PREFIX core: <http://purl.uniprot.org/core/>
+
+		SELECT ?genedescription ?taxonomy
+		WHERE {
+			?geneid gene:description ?genedescription .
+			?geneid gene:uniprotAccession ?uniprotaccession .
+			?geneid gene:chromosome 'Y' .
+			?uniprotaccession core:organism ?taxonomy .
+			?taxonomy core:scientificName 'Homo sapiens' .
+		}

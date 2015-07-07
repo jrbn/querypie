@@ -1,0 +1,7 @@
+#!/bin/bash
+
+SDIR="$1"
+DDIR="$2"
+shift 2
+cd $SDIR
+cp -as "$@" $DDIR
