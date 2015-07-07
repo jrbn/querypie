@@ -49,6 +49,10 @@ public class Rule4 extends Rule3 {
 	// public int n_vars_head_from_precomps;
 	// public int[] pos_vars_head_from_precomps = new int[3];
 
+	public boolean canFilterBindingsFromHead = false;
+	public int posGenFilterBindingsFromHead = -1;
+	public int posHeadFilterBindingsFromHead = -1;
+
 	public Rule4(int id, String head, String[] precomps, String[] locations,
 			String list_head, String list_loc, String[] generics)
 			throws Exception {
@@ -384,7 +388,6 @@ public class Rule4 extends Rule3 {
 			for (int i = 0; i < pu.size(); ++i) {
 				pos_unique_vars[j][i] = pu.get(i);
 			}
-
 		}
 
 		// Filter out the values for the following times
@@ -416,6 +419,16 @@ public class Rule4 extends Rule3 {
 			pos_unique_vars_next[i] = new int[unique.size()];
 			for (int m = 0; m < unique.size(); ++m) {
 				pos_unique_vars_next[i][m] = unique.get(m);
+			}
+		}
+
+		// Calculate whether we can filter the bindings from the head
+		if (GENERICS_STRATS == null || GENERICS_STRATS.length == 0) {
+			if (lshared_var_firsthead != null
+					&& lshared_var_firsthead.length == 1) {
+				canFilterBindingsFromHead = true;
+				posHeadFilterBindingsFromHead = lshared_var_firsthead[0][0].pos2;
+				posGenFilterBindingsFromHead = lshared_var_firsthead[0][0].pos1;
 			}
 		}
 	}

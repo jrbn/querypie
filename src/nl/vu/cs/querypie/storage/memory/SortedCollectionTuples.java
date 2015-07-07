@@ -132,25 +132,6 @@ public class SortedCollectionTuples implements Collection<Long>,
 	return tuples.length / sizeTuple;
     }
 
-    /****** NOT IMPLEMENTED ******/
-
-    @Override
-    public boolean add(Long e) {
-	log.error("This should not happen!");
-	return false;
-    }
-
-    @Override
-    public boolean addAll(Collection<? extends Long> c) {
-	log.error("This should not happen!");
-	return false;
-    }
-
-    @Override
-    public void clear() {
-	log.error("This should not happen!");
-    }
-
     @Override
     public boolean contains(Object o) {
 	return contains(((Long) o).longValue());
@@ -158,43 +139,84 @@ public class SortedCollectionTuples implements Collection<Long>,
 
     @Override
     public boolean containsAll(Collection<?> c) {
-	log.error("This should not happen!");
+        if (! (c instanceof SortedCollectionTuples)) {
+            return false;
+        }
+        SortedCollectionTuples t = (SortedCollectionTuples) c;
+
+        if (tuples == null) {
+            return t.tuples == null || t.tuples.length == 0;
+        }
+
+        if (sizeTuple != 1 || t.sizeTuple != 1) {
+            log.error("This should not happen!", new Throwable());
+            return false;
+        }
+
+        int index = 0;
+        for (int i = 0; i < t.tuples.length; i++) {
+            while (index < tuples.length && tuples[index] < t.tuples[i]) {
+                index++;
+            }
+            if (index >= tuples.length || tuples[index] > t.tuples[i]) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /****** NOT IMPLEMENTED ******/
+
+    @Override
+    public boolean add(Long e) {
+	log.error("This should not happen!", new Throwable());
 	return false;
     }
 
     @Override
+    public boolean addAll(Collection<? extends Long> c) {
+	log.error("This should not happen!", new Throwable());
+	return false;
+    }
+
+    @Override
+    public void clear() {
+	log.error("This should not happen!", new Throwable());
+    }
+
+    @Override
     public boolean isEmpty() {
-	log.error("This should not happen!");
+	log.error("This should not happen!", new Throwable());
 	return false;
     }
 
     @Override
     public boolean remove(Object o) {
-	log.error("This should not happen!");
+	log.error("This should not happen!", new Throwable());
 	return false;
     }
 
     @Override
     public boolean removeAll(Collection<?> c) {
-	log.error("This should not happen!");
+	log.error("This should not happen!", new Throwable());
 	return false;
     }
 
     @Override
     public boolean retainAll(Collection<?> c) {
-	log.error("This should not happen!");
+	log.error("This should not happen!", new Throwable());
 	return false;
     }
 
     @Override
     public Object[] toArray() {
-	log.error("This should not happen!");
+	log.error("This should not happen!", new Throwable());
 	return null;
     }
 
     @Override
     public <T> T[] toArray(T[] a) {
-	log.error("This should not happen!");
+	log.error("This should not happen!", new Throwable());
 	return null;
     }
 

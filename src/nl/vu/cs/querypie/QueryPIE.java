@@ -105,8 +105,8 @@ public class QueryPIE {
 		}
 
 		conf.setBoolean(Consts.SEND_TUPLES_COMPRESSED, false); // Probably not
-																// worth the
-																// effort
+		// worth the
+		// effort
 		arch.startup();
 	}
 
@@ -114,7 +114,7 @@ public class QueryPIE {
 
 		// Parse eventual command line options
 		if (args.length < 1) {
-			System.out.println("Usage: HReason <data> <options>");
+			System.out.println("Usage: QueryPIE <data> <options>");
 			return;
 		}
 

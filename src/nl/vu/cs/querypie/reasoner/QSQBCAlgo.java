@@ -18,7 +18,7 @@ import nl.vu.cs.querypie.storage.RDFTerm;
 
 public class QSQBCAlgo extends Action {
 
-	public static final String TREE_ID = "tree";
+	public static final String TREE_ID = "qsq_tree";
 
 	public static final void applyTo(RDFTerm v1, RDFTerm v2, RDFTerm v3,
 			ActionSequence actions) throws ActionNotConfiguredException {
@@ -46,7 +46,7 @@ public class QSQBCAlgo extends Action {
 	@Override
 	public void process(Tuple tuple, ActionContext context,
 			ActionOutput actionOutput) throws Exception {
-		Ruleset.getInstance().setQsqEvaluation();
+		Ruleset.getInstance().setQsqEvaluation(true);
 		long v1 = ((RDFTerm) tuple.get(0)).getValue();
 		long v2 = ((RDFTerm) tuple.get(1)).getValue();
 		long v3 = ((RDFTerm) tuple.get(2)).getValue();

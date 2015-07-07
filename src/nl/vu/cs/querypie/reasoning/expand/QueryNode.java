@@ -1,23 +1,47 @@
 package nl.vu.cs.querypie.reasoning.expand;
 
-import java.util.Set;
+import java.util.Collection;
 
 import nl.vu.cs.ajira.actions.ActionContext;
 import nl.vu.cs.querypie.storage.RDFTerm;
 import nl.vu.cs.querypie.storage.Schema;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 public class QueryNode extends Node {
 
-	public long s, p, o;
+	protected static final Logger log = LoggerFactory
+			.getLogger(QueryNode.class);
+
+	private long s;
+	public long p, o;
 	String nameS, nameP, nameO;
 
-	public long list_head = -1;
+	public Collection<Long> list_heads = null;
 	public int list_id = -1;
 
 	private boolean isComputed = false;
 	private boolean checkComputed = false;
 
 	private boolean isExpanded = false;
+	private boolean shouldBeReExpanded = false;
+
+	private boolean isNew = true;
+	private boolean isNewChecked = false;
+
+	private boolean isQueued = false;
+
+	// Used in the algo OptimalRuleBC
+	public int idFilterValues = -1;
+	public int posFilterValues = -1;
+
+	public QueryNode prev = null;
+	public QueryNode[] next = null;
+	public int current_pattern = 0;
+
+	private long timeUpdate = -1;
+	private boolean updatedPreviousIteration = true;
 
 	QueryNode(Node parent, int id, Tree tree) {
 		super(id, tree);
@@ -41,6 +65,32 @@ public class QueryNode extends Node {
 			o = v;
 			break;
 		}
+	}
+
+	public final void setUpdated() {
+		if (timeUpdate == -1) {
+			synchronized (this) {
+				if (timeUpdate == -1)
+					timeUpdate = System.currentTimeMillis();
+			}
+		}
+	}
+
+	public final boolean isUpdated() {
+		return timeUpdate != -1;
+	}
+
+	public final void resetUpdatedCounter() {
+		updatedPreviousIteration = isUpdated();
+		timeUpdate = -1;
+	}
+
+	public final void forceUpdateInPreviousIteration() {
+		updatedPreviousIteration = true;
+	}
+
+	public final boolean wasUpdatedPreviousItr() {
+		return updatedPreviousIteration;
 	}
 
 	public final long getTerm(final int pos) {
@@ -69,24 +119,48 @@ public class QueryNode extends Node {
 		}
 	}
 
+	public void setQueued(boolean value) {
+		isQueued = value;
+	}
+
+	public boolean isQueued() {
+		return isQueued;
+	}
+
+	public boolean checkedNew() {
+		return isNewChecked;
+	}
+
+	public boolean isNew() {
+		return isNew;
+	}
+
+	public final void setS(final long s) {
+		this.s = s;
+	}
+
+	public final long getS() {
+		return s;
+	}
+
 	public boolean equalsInAncestors(ActionContext context) {
 		QueryNode parent = null;
 		if (this.parent != null) {
 			parent = (QueryNode) this.parent.parent; // skip rule node
 		}
 
-		RDFTerm ts = new RDFTerm(s);
-		RDFTerm parentTerm = new RDFTerm();
+		final RDFTerm ts = new RDFTerm(s);
+		final RDFTerm parentTerm = new RDFTerm();
 
 		while (parent != null) {
 			// Check whether the query is the same
 			parentTerm.setValue(parent.s);
 			if (parentTerm.equals(ts, context)) {
 				parentTerm.setValue(parent.p);
-				RDFTerm tp = new RDFTerm(p);
+				final RDFTerm tp = new RDFTerm(p);
 				if (parentTerm.equals(tp, context)) {
 					parentTerm.setValue(parent.o);
-					RDFTerm to = new RDFTerm(o);
+					final RDFTerm to = new RDFTerm(o);
 					if (parentTerm.equals(to, context)) {
 						return true;
 					}
@@ -115,37 +189,74 @@ public class QueryNode extends Node {
 		} else if (!checkComputed) {
 			// Check all the previous computed queries to see whether we have
 			// already precomputed it
-			isComputed = tree.isComputed(this, context);
-			checkComputed = true;
+			if (tree.isComputed(this, context)) {
+				setComputed();
+			} else {
+				checkComputed = true;
+				isComputed = false;
+			}
 		}
-
 		return isComputed;
+	}
+
+	@Override
+	public String toString() {
+		String parentRule = null;
+		if (parent != null) {
+			parentRule = ((RuleNode) parent).rule.toString();
+		}
+		return s + " " + p + " " + o + ". ID " + getId() + " height " + height
+				+ " parentRule " + parentRule;
+	}
+
+	public boolean isNew(final ActionContext context) {
+		if (!isNewChecked) {
+			isNew = tree.isNew(this, context);
+			isNewChecked = true;
+		}
+		return isNew;
 	}
 
 	public boolean isExpanded() {
 		return s == Schema.SCHEMA_SUBSET || isExpanded;
 	}
 
+	public void setNew(boolean value) {
+		isNew = value;
+		isNewChecked = true;
+	}
+
 	public void setExpanded() {
 		isExpanded = true;
+		shouldBeReExpanded = false;
+	}
+
+	public void setToExpand() {
+		isExpanded = false;
 	}
 
 	@SuppressWarnings("unchecked")
-	private final static boolean isTermContainedIn(long term1, long term2, ActionContext context) {
-		// Check the subject
+	private final static boolean isTermContainedIn(long term1, long term2,
+			ActionContext context) {
+		if (term1 == term2) {
+			return true;
+		}
+		// One of the two terms is either ALL_RESOURCES or a set.
 		if (term1 >= 0) {
 			if (term2 >= 0) {
-				return term1 == term2;
-			} else if (term2 != Schema.ALL_RESOURCES) {				
-				Set<Long> set = (Set<Long>) context.getObjectFromCache(term2);
+				// we already know they are equal
+			} else if (term2 != Schema.ALL_RESOURCES) {
+				final Collection<Long> set = Schema.getInstance().getSubset(
+						term2, context);
 				return set.contains(term1);
 			}
 		} else if (term1 == Schema.ALL_RESOURCES) {
 			if (term2 != Schema.ALL_RESOURCES) {
 				return false;
 			}
-		} else { //Here term1 is a set
-			Set<Long> set = (Set<Long>) context.getObjectFromCache(term1);
+		} else { // Here term1 is a set
+			final Collection<Long> set = Schema.getInstance().getSubset(term1,
+					context);
 			if (term2 >= 0) {
 				if (set.size() == 1) {
 					return set.contains(term2);
@@ -153,16 +264,39 @@ public class QueryNode extends Node {
 					return false;
 				}
 			} else if (term2 != Schema.ALL_RESOURCES) {
-				Set<Long> set2 = (Set<Long>) context.getObjectFromCache(term2);
-				return set.equals(set2);
-			}			
+				// final Collection<Long> set2 =
+				// Schema.getInstance().getSubset(term2, context);
+				// Is this worth-while? It is an expensive test,
+				// how often does it actually reduce work later on? --Ceriel
+				// return set2.containsAll(set);
+				return false;
+			}
 		}
 		return true;
 	}
 
-	public final boolean isContainedIn(final QueryNode parentQuery, final ActionContext context) {
+	public final boolean isContainedIn(final QueryNode parentQuery,
+			final ActionContext context) {
+		// Filter out easy cases before dealing with sets.
+		if (s >= 0 && parentQuery.s >= 0 && s != parentQuery.s) {
+			return false;
+		}
+		if (p >= 0 && parentQuery.p >= 0 && p != parentQuery.p) {
+			return false;
+		}
+		if (o >= 0 && parentQuery.o >= 0 && o != parentQuery.o) {
+			return false;
+		}
 		return isTermContainedIn(s, parentQuery.s, context)
 				&& isTermContainedIn(p, parentQuery.p, context)
 				&& isTermContainedIn(o, parentQuery.o, context);
+	}
+
+	public boolean shouldBeReExpanded() {
+		return shouldBeReExpanded;
+	}
+
+	public void setReExpansion() {
+		shouldBeReExpanded = true;
 	}
 }

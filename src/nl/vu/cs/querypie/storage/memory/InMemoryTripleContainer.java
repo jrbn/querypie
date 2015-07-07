@@ -4,12 +4,17 @@ import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.TreeMap;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 import nl.vu.cs.ajira.actions.ActionContext;
 import nl.vu.cs.querypie.storage.RDFTerm;
@@ -51,6 +56,10 @@ public class InMemoryTripleContainer implements Serializable {
 		this(false);
 	}
 
+	public Set<String> getQueries() {
+		return queries.keySet();
+	}
+
 	public void clear() {
 		queries.clear();
 		set.clear();
@@ -81,10 +90,14 @@ public class InMemoryTripleContainer implements Serializable {
 			}
 		}
 
-		if (!set.add(t)) {
-			return false;
-		}
-		return true;
+                return set.add(t);
+	}
+
+	public boolean containsTriple(long value, long value2, long value3) {
+		triple.subject = value;
+		triple.predicate = value2;
+		triple.object = value3;
+		return set.contains(triple);
 	}
 
 	public boolean addTriple(RDFTerm a, RDFTerm b, RDFTerm c,
@@ -94,10 +107,10 @@ public class InMemoryTripleContainer implements Serializable {
 		this.triple.object = c.getValue();
 
 		if (input != null) {
-			synchronized (input) {
-				if (input.containsTriple(this.triple)) {
-					return false;
-				}
+			// synchronized (input) {
+			if (input.containsTriple(this.triple)) {
+				return false;
+				// }
 			}
 		}
 
@@ -122,11 +135,11 @@ public class InMemoryTripleContainer implements Serializable {
 			}
 		}
 		if (input2 != null) {
-			synchronized (input2) {
-				if (input2.containsTriple(this.triple)) {
-					return false;
-				}
+			// synchronized (input2) {
+			if (input2.containsTriple(this.triple)) {
+				return false;
 			}
+			// }
 		}
 
 		if (!set.add(this.triple)) {
@@ -142,8 +155,10 @@ public class InMemoryTripleContainer implements Serializable {
 
 	public synchronized void addAll(InMemoryTripleContainer set) {
 		this.set.addAll(set.set);
+		addQueries(set);
+	}
 
-		// Add queries
+	private void addQueries(InMemoryTripleContainer set) {// Add queries
 		for (Map.Entry<String, List<List<Collection<Long>>>> entry : set.queries
 				.entrySet()) {
 			List<List<Collection<Long>>> existingList = this.queries.get(entry
@@ -181,37 +196,154 @@ public class InMemoryTripleContainer implements Serializable {
 		return set.contains(triple);
 	}
 
-	public void index() {
+	private static abstract class TripleIndexer implements Callable<Integer> {
 
+		final Map<Long, Collection<Triple>> map;
+		final Triple[] triples;
+
+		public TripleIndexer(Map<Long, Collection<Triple>> map, Triple[] triples) {
+			this.map = map;
+			this.triples = triples;
+		}
+	}
+
+	private static class SubjectTripleIndexer extends TripleIndexer {
+		public SubjectTripleIndexer(Map<Long, Collection<Triple>> map,
+				Triple[] triples) {
+			super(map, triples);
+		}
+
+		@Override
+		public Integer call() throws Exception {
+			for (Triple triple : triples) {
+				Collection<Triple> sTriples = map.get(triple.subject);
+				if (sTriples == null) {
+					sTriples = new ArrayList<Triple>();
+					map.put(triple.subject, sTriples);
+				}
+				sTriples.add(triple);
+			}
+			return null;
+		}
+	}
+
+	private static class PredicateTripleIndexer extends TripleIndexer {
+		public PredicateTripleIndexer(Map<Long, Collection<Triple>> map,
+				Triple[] triples) {
+			super(map, triples);
+		}
+
+		@Override
+		public Integer call() throws Exception {
+			for (Triple triple : triples) {
+				Collection<Triple> sTriples = map.get(triple.predicate);
+				if (sTriples == null) {
+					sTriples = new ArrayList<Triple>();
+					map.put(triple.predicate, sTriples);
+				}
+				sTriples.add(triple);
+			}
+			return null;
+		}
+	}
+
+	private static class ObjectTripleIndexer extends TripleIndexer {
+		public ObjectTripleIndexer(Map<Long, Collection<Triple>> map,
+				Triple[] triples) {
+			super(map, triples);
+		}
+
+		@Override
+		public Integer call() throws Exception {
+			for (Triple triple : triples) {
+				Collection<Triple> sTriples = map.get(triple.object);
+				if (sTriples == null) {
+					sTriples = new ArrayList<Triple>();
+					map.put(triple.object, sTriples);
+				}
+				sTriples.add(triple);
+			}
+			return null;
+		}
+	}
+
+	public void addAllIndexed(InMemoryTripleContainer outputContainer) {
+		if (!compress && s != null) {
+			addQueries(outputContainer);
+			for (Triple triple : outputContainer.set) {
+				if (set.add(triple)) {
+					Collection<Triple> sTriples = s.get(triple.subject);
+					if (sTriples == null) {
+						sTriples = new ArrayList<Triple>();
+						s.put(triple.subject, sTriples);
+					}
+					sTriples.add(triple);
+
+					Collection<Triple> pTriples = p.get(triple.predicate);
+					if (pTriples == null) {
+						pTriples = new ArrayList<Triple>();
+						p.put(triple.predicate, pTriples);
+					}
+					pTriples.add(triple);
+
+					Collection<Triple> oTriples = o.get(triple.object);
+					if (oTriples == null) {
+						oTriples = new ArrayList<Triple>();
+						o.put(triple.object, oTriples);
+					}
+					oTriples.add(triple);
+				}
+			}
+		} else {
+			addAll(outputContainer);
+			index();
+		}
+	}
+
+	public void index() {
 		if (!compress) {
 			s = new HashMap<Long, Collection<Triple>>();
 			p = new HashMap<Long, Collection<Triple>>();
 			o = new HashMap<Long, Collection<Triple>>();
 
-			Triple[] list = set.toArray(new Triple[set.size()]);
+			final Triple[] list = set.toArray(new Triple[set.size()]);
 			Arrays.sort(list);
-
-			for (Triple triple : list) {
-				Collection<Triple> sTriples = s.get(triple.subject);
-				if (sTriples == null) {
-					sTriples = new ArrayList<Triple>();
-					s.put(triple.subject, sTriples);
+			if (set.size() > 1000) {
+				// Use two threads
+				ExecutorService executor = Executors.newFixedThreadPool(3);
+				try {
+					List<Callable<Integer>> tasks = new ArrayList<Callable<Integer>>();
+					tasks.add(new SubjectTripleIndexer(s, list));
+					tasks.add(new PredicateTripleIndexer(p, list));
+					tasks.add(new ObjectTripleIndexer(o, list));
+					executor.invokeAll(tasks);
+				} catch (InterruptedException e) {
+					log.error("Error", e);
 				}
-				sTriples.add(triple);
+				executor.shutdown();
+			} else {
+				for (Triple triple : list) {
+					Collection<Triple> sTriples = s.get(triple.subject);
+					if (sTriples == null) {
+						sTriples = new ArrayList<Triple>();
+						s.put(triple.subject, sTriples);
+					}
+					sTriples.add(triple);
 
-				Collection<Triple> pTriples = p.get(triple.predicate);
-				if (pTriples == null) {
-					pTriples = new ArrayList<Triple>();
-					p.put(triple.predicate, pTriples);
-				}
-				pTriples.add(triple);
+					Collection<Triple> pTriples = p.get(triple.predicate);
+					if (pTriples == null) {
+						pTriples = new ArrayList<Triple>();
+						p.put(triple.predicate, pTriples);
+					}
+					pTriples.add(triple);
 
-				Collection<Triple> oTriples = o.get(triple.object);
-				if (oTriples == null) {
-					oTriples = new ArrayList<Triple>();
-					o.put(triple.object, oTriples);
+					Collection<Triple> oTriples = o.get(triple.object);
+					if (oTriples == null) {
+						oTriples = new ArrayList<Triple>();
+						o.put(triple.object, oTriples);
+					}
+					oTriples.add(triple);
 				}
-				oTriples.add(triple);
 			}
 		} else {
 
@@ -320,7 +452,7 @@ public class InMemoryTripleContainer implements Serializable {
 
 			if (v2 <= RDFTerm.THRESHOLD_VARIABLE) {
 				key += "* ";
-				sets.add(Schema.getInstance().getSubset(v3, context));
+				sets.add(Schema.getInstance().getSubset(v2, context));
 			} else {
 				key += v2 + " ";
 			}
@@ -443,11 +575,53 @@ public class InMemoryTripleContainer implements Serializable {
 		return true;
 	}
 
-	public boolean isToCopy() {
-		return size() > 0 || queries.size() > 0;
+	// public boolean isToCopy() {
+	// return size() > 0 || queries.size() > 0;
+	// }
+
+	// public void removeAll(InMemoryTripleContainer explicitTriples) {
+	// set.removeAll(explicitTriples.set);
+	// }
+
+	final private void addToList(final ArrayList<Triple> list, final Triple t) {
+		int insertionPoint = Collections.binarySearch(list, t);
+		list.add(-insertionPoint - 1, t);
 	}
 
-	public void removeAll(InMemoryTripleContainer explicitTriples) {
-		set.removeAll(explicitTriples.set);
+	public void addIndexedTriple(Triple triple) throws Exception {
+		if (!compress && s != null) {
+			if (set.add(triple)) {
+				ArrayList<Triple> sTriples = (ArrayList<Triple>) s
+						.get(triple.subject);
+				if (sTriples == null) {
+					sTriples = new ArrayList<Triple>();
+					s.put(triple.subject, sTriples);
+				}
+
+				// Insert sort
+				addToList(sTriples, triple);
+
+				ArrayList<Triple> pTriples = (ArrayList<Triple>) p
+						.get(triple.predicate);
+				if (pTriples == null) {
+					pTriples = new ArrayList<Triple>();
+					p.put(triple.predicate, pTriples);
+				}
+
+				// Insert sort
+				addToList(pTriples, triple);
+
+				ArrayList<Triple> oTriples = (ArrayList<Triple>) o
+						.get(triple.object);
+				if (oTriples == null) {
+					oTriples = new ArrayList<Triple>();
+					o.put(triple.object, oTriples);
+				}
+				// Insert sort
+				addToList(oTriples, triple);
+			}
+		} else if (compress) {
+			throw new Exception("Not supported");
+		}
 	}
 }

@@ -31,13 +31,14 @@ import org.slf4j.LoggerFactory;
 public class SPARQLQueryOptimizer extends Action {
 
 	public static final int I_MAX_LEVELS = 0;
+	public static final int B_INCLUDE_IMPLICIT = 1;
 
 	public static final class Query {
 		long[] names = new long[3];
 		long[] values = new long[3];
 		int nconstants = 0;
-		public long explicitEstimate = -1;
-		public long implicitEstimate = -1;
+		public long explicitEstimate = 0;
+		public long implicitEstimate = 0;
 
 		public int njoins(Set<Long> vars) {
 			int n = 0;
@@ -64,15 +65,19 @@ public class SPARQLQueryOptimizer extends Action {
 			.getLogger(SPARQLQueryOptimizer.class);
 
 	private int maxLevels;
+	private boolean includeImplicit;
 
 	@Override
 	protected void registerActionParameters(ActionConf conf) {
 		conf.registerParameter(I_MAX_LEVELS, "I_MAX_LEVELS", null, true);
+		conf.registerParameter(B_INCLUDE_IMPLICIT, "B_INCLUDE_IMPLICIT", true,
+				false);
 	}
 
 	@Override
 	public void startProcess(ActionContext context) throws Exception {
 		maxLevels = getParamInt(I_MAX_LEVELS);
+		includeImplicit = getParamBoolean(B_INCLUDE_IMPLICIT);
 	}
 
 	@Override
@@ -82,7 +87,7 @@ public class SPARQLQueryOptimizer extends Action {
 			long[] serializedJoin = new long[inputTuple.getNElements()];
 			// Fill it from the tuple
 			for (int i = 0; i < inputTuple.getNElements(); ++i) {
-				TLong number = (TLong) inputTuple.get(i);
+				RDFTerm number = (RDFTerm) inputTuple.get(i);
 				serializedJoin[i] = number.getValue();
 			}
 			if (log.isDebugEnabled()) {
@@ -163,6 +168,9 @@ public class SPARQLQueryOptimizer extends Action {
 
 		for (int i = 0; i < queries.size(); ++i) {
 			long[] q = queries.get(i);
+			if (log.isDebugEnabled()) {
+				log.debug("estimateCardinality: [" + Arrays.toString(q) + "]");
+			}
 			ActionSequence actions = new ActionSequence();
 
 			ReasoningUtils.getResultsQuery(actions, TupleFactory.newTuple(
@@ -189,6 +197,9 @@ public class SPARQLQueryOptimizer extends Action {
 
 		// Wait until all estimations are completed
 		synchronized (lock) {
+			if (lock.getCount() != queries.size()) {
+				context.startBlocking();
+			}
 			while (lock.getCount() != queries.size()) {
 				lock.wait();
 			}
@@ -213,7 +224,7 @@ public class SPARQLQueryOptimizer extends Action {
 
 			Tree tree = new Tree();
 			QueryNode query = tree.newQuery(null);
-			query.s = q.values[0];
+			query.setS(q.values[0]);
 			query.p = q.values[1];
 			query.o = q.values[2];
 
@@ -223,7 +234,7 @@ public class SPARQLQueryOptimizer extends Action {
 					QueryNode queryTree = tree.getQuery(j);
 					if (queryTree.height == currentLevel * 2) {
 						TreeExpander.expandQuery(context, queryTree, tree,
-								TreeExpander.ALL);
+								TreeExpander.ALL, null);
 					} else {
 						// Since the tree is created breadth-first, I can stop
 						// when I finished the level
@@ -234,9 +245,10 @@ public class SPARQLQueryOptimizer extends Action {
 			}
 
 			if (log.isDebugEnabled())
-				log.debug("Estimating the cardinality of pattern " + query.s
-						+ " " + query.p + " " + query.o + " has generated "
-						+ (tree.getNQueries() - 1) + " queries");
+				log.debug("Estimating the cardinality of pattern "
+						+ query.getS() + " " + query.p + " " + query.o
+						+ " has generated " + (tree.getNQueries() - 1)
+						+ " queries");
 
 			// Estimate the cardinality of these queries
 			List<long[]> queriesToEstimate = new ArrayList<long[]>();
@@ -320,11 +332,17 @@ public class SPARQLQueryOptimizer extends Action {
 		// First I sort the queries according to the number of constants.
 		ArrayList<Query> queries = parseQueries(query);
 
+		if (queries.size() <= 1) {
+			return;
+		}
+
 		// Estimate the cardinality of the queries
 		estimateExplicitCardinality(queries, output, context);
 
 		// Rearrange them considering the cardinality with reasoning
-		estimateImplicitCardinality(queries, maxLevels, output, context);
+		if (includeImplicit) {
+			estimateImplicitCardinality(queries, maxLevels, output, context);
+		}
 
 		// Sort them by cardinality and nconstants
 		sortQueriesByCardinalityAndNConstants(queries);

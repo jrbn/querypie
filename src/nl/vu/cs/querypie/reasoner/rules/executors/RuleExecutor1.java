@@ -30,6 +30,7 @@ public class RuleExecutor1 extends Action {
 	public static final int L_FIELD2 = 1;
 	public static final int L_FIELD3 = 2;
 	public static final int I_RULEDEF = 3;
+	public static final int I_RULESET = 4;
 
 	@Override
 	public void registerActionParameters(ActionConf conf) {
@@ -37,6 +38,7 @@ public class RuleExecutor1 extends Action {
 		conf.registerParameter(L_FIELD2, "L_FIELD2", 0, true);
 		conf.registerParameter(L_FIELD3, "L_FIELD3", 0, true);
 		conf.registerParameter(I_RULEDEF, "I_RULEDEF", 0, true);
+		conf.registerParameter(I_RULESET, "I_RULESET", 0, true);
 	}
 
 	/***** DATA STRUCTURES OF SUPPORT *****/

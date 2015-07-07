@@ -22,6 +22,7 @@ import nl.vu.cs.querypie.reasoner.rules.executors.RuleExecutor3;
 import nl.vu.cs.querypie.reasoner.rules.executors.RuleExecutor4;
 import nl.vu.cs.querypie.reasoning.expand.ExpandQuery;
 import nl.vu.cs.querypie.reasoning.expand.QueryNode;
+import nl.vu.cs.querypie.reasoning.expand.TreeExpander;
 import nl.vu.cs.querypie.storage.RDFTerm;
 import nl.vu.cs.querypie.storage.Schema;
 
@@ -55,24 +56,60 @@ public class ReasoningUtils {
 
 	public static final void generate_new_chain(ActionOutput output, Rule rule,
 			int stratg_id, boolean group_to_single_node, QueryNode rawTuple,
-			int currentPattern, QueryNode head, int refToMemory,
-			ActionContext context, long list_head, int list_id,
-			boolean recursive, boolean cacheInput) throws Exception {
+			int currentPattern, QueryNode head, ActionContext context,
+			int list_id, boolean recursive, boolean cacheInput,
+			String treeName, int idFilterValues) throws Exception {
+		generate_new_chain(output, rule, stratg_id, group_to_single_node,
+				rawTuple, currentPattern, head, context, list_id, recursive,
+				cacheInput, TreeExpander.ALL, treeName, idFilterValues);
+	}
+
+	public static final void generate_new_chain(ActionOutput output, Rule rule,
+			int stratg_id, boolean group_to_single_node, QueryNode rawTuple,
+			int currentPattern, QueryNode head, ActionContext context,
+			int list_id, boolean recursive, boolean cacheInput, int typeRules,
+			String treeName, int idFilterValues) throws Exception {
 		ActionSequence newChain = new ActionSequence();
 		generate_new_chain(newChain, rule, stratg_id, group_to_single_node,
-				rawTuple, currentPattern, head, refToMemory, context,
-				list_head, list_id, recursive, cacheInput);
+				rawTuple, currentPattern, head, context, list_id, recursive,
+				cacheInput, typeRules, treeName, idFilterValues);
 		output.branch(newChain);
+	}
+
+	public static final void applyRule(ActionSequence newChain, Rule rule,
+			QueryNode head, QueryNode query, int stratg_id, int currentPattern,
+			String treeName, int list_id, int idFilterValues, int ruleset)
+			throws ActionNotConfiguredException {
+		ActionConf c = ActionFactory.getActionConf(ruleClasses[rule.type]
+				.getName());
+		c.setParamInt(RuleExecutor1.I_RULEDEF, rule.id);
+		c.setParamLong(RuleExecutor1.L_FIELD1, head.getS());
+		c.setParamLong(RuleExecutor1.L_FIELD2, head.p);
+		c.setParamLong(RuleExecutor1.L_FIELD3, head.o);
+		c.setParamInt(RuleExecutor1.I_RULESET, ruleset);
+		if (rule.type > 1) {
+			c.setParamInt(RuleExecutor2.I_FILTERVALUESSET, idFilterValues);
+		}
+		if (rule.type > 2) {
+			c.setParamInt(RuleExecutor3.I_STRAG_ID, stratg_id);
+			c.setParamInt(RuleExecutor3.I_PATTERN_POS, currentPattern);
+			c.setParamInt(RuleExecutor3.I_QUERY_ID, query.getId());
+			c.setParamString(RuleExecutor3.S_TREENAME, treeName);
+		}
+		if (rule.type == 4) {
+			c.setParamInt(RuleExecutor4.I_LIST_CURRENT, list_id);
+		}
+		newChain.add(c);
 	}
 
 	public static final void generate_new_chain(ActionSequence newChain,
 			Rule rule, int stratg_id, boolean group_to_single_node,
 			QueryNode rawTuple, int currentPattern, QueryNode head,
-			int refToMemory, ActionContext context, long list_head,
-			int list_id, boolean recursive, boolean cacheInput)
-			throws Exception {
+			ActionContext context, int list_id, boolean recursive,
+			boolean cacheInput, int typeRules, String treeName,
+			int idFilterValues) throws Exception {
 		// Read from the dummy layer
-		if (rawTuple.s == Schema.SCHEMA_SUBSET || recursive) {
+		if (rawTuple.getS() == Schema.SCHEMA_SUBSET || recursive) {
 
 			ActionConf c = ActionFactory.getActionConf(QueryInputLayer.class);
 			c.setParamString(QueryInputLayer.S_INPUTLAYER,
@@ -80,20 +117,22 @@ public class ReasoningUtils {
 			c.setParamWritable(
 					QueryInputLayer.W_QUERY,
 					new nl.vu.cs.ajira.actions.support.Query(TupleFactory
-							.newTuple(new RDFTerm(rawTuple.s), new RDFTerm(
-									rawTuple.p), new RDFTerm(rawTuple.o),
-									new TInt(rawTuple.getId()))));
+							.newTuple(new RDFTerm(rawTuple.getS()),
+									new RDFTerm(rawTuple.p), new RDFTerm(
+											rawTuple.o),
+											new TInt(rawTuple.getId()))));
 			newChain.add(c);
 		} else { // Read from the default layer
 			ReasoningUtils.getResultsQuery(newChain, TupleFactory.newTuple(
-					new RDFTerm(rawTuple.s), new RDFTerm(rawTuple.p),
+					new RDFTerm(rawTuple.getS()), new RDFTerm(rawTuple.p),
 					new RDFTerm(rawTuple.o)), false);
 			newChain.add(ActionFactory.getActionConf(SetAsExplicit.class));
 		}
 
-		if (recursive && rawTuple.s != Schema.SCHEMA_SUBSET) {
+		if (recursive && rawTuple.getS() != Schema.SCHEMA_SUBSET) {
 			ActionConf c = ActionFactory.getActionConf(ExpandQuery.class);
 			c.setParamBoolean(ExpandQuery.B_EXPLICIT, true);
+			c.setParamInt(ExpandQuery.I_TYPE_RULES, typeRules);
 			newChain.add(c);
 		}
 
@@ -102,30 +141,19 @@ public class ReasoningUtils {
 			c.setParamStringArray(CollectToNode.SA_TUPLE_FIELDS,
 					RDFTerm.class.getName(), RDFTerm.class.getName(),
 					RDFTerm.class.getName(), TBoolean.class.getName());
+			c.setParamBoolean(CollectToNode.B_SORT, true);
 			newChain.add(c);
 		}
 
-		if (rawTuple.s != Schema.SCHEMA_SUBSET && cacheInput) {
-			AddIntermediateTriples.applyTo(rawTuple.s, rawTuple.p, rawTuple.o,
-					newChain);
-		}
+		// if (rawTuple.s != Schema.SCHEMA_SUBSET && cacheInput) {
+		// AddIntermediateTriples.applyTo(rawTuple.s, rawTuple.p, rawTuple.o,
+		// newChain);
+		// }
 
-		ActionConf c = ActionFactory.getActionConf(ruleClasses[rule.type]
-				.getName());
-		c.setParamInt(RuleExecutor1.I_RULEDEF, rule.id);
-		c.setParamLong(RuleExecutor1.L_FIELD1, head.s);
-		c.setParamLong(RuleExecutor1.L_FIELD2, head.p);
-		c.setParamLong(RuleExecutor1.L_FIELD3, head.o);
-		if (rule.type > 2) {
-			c.setParamInt(RuleExecutor3.I_STRAG_ID, stratg_id);
-			c.setParamInt(RuleExecutor3.I_KEY, refToMemory);
-			c.setParamInt(RuleExecutor3.I_PATTERN_POS, currentPattern);
-			c.setParamInt(RuleExecutor3.I_QUERY_ID, rawTuple.getId());
-		}
-		if (rule.type == 4) {
-			c.setParamLong(RuleExecutor4.L_LIST_HEAD, list_head);
-			c.setParamInt(RuleExecutor4.I_LIST_CURRENT, list_id);
-		}
-		newChain.add(c);
+		applyRule(newChain, rule, head, rawTuple, stratg_id, currentPattern,
+				treeName, list_id, idFilterValues, typeRules);
+
+		AddIntermediateTriples.applyTo(head.getS(), head.p, head.o,
+				head.getId(), newChain);
 	}
 }

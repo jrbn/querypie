@@ -1,5 +1,8 @@
 package nl.vu.cs.querypie.reasoning.expand;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import nl.vu.cs.ajira.actions.Action;
 import nl.vu.cs.ajira.actions.ActionConf;
 import nl.vu.cs.ajira.actions.ActionContext;
@@ -18,49 +21,51 @@ import nl.vu.cs.querypie.reasoner.QSQBCAlgo;
 import nl.vu.cs.querypie.reasoner.ReasoningUtils;
 import nl.vu.cs.querypie.reasoner.SetAsExplicit;
 import nl.vu.cs.querypie.reasoner.rules.Rule;
-import nl.vu.cs.querypie.reasoner.rules.executors.RuleExecutor1;
-import nl.vu.cs.querypie.reasoner.rules.executors.RuleExecutor3;
-import nl.vu.cs.querypie.reasoner.rules.executors.RuleExecutor4;
 import nl.vu.cs.querypie.storage.RDFTerm;
 import nl.vu.cs.querypie.storage.Schema;
 import nl.vu.cs.querypie.storage.memory.InMemoryTripleContainer;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 public class QSQEvaluateQuery extends Action {
 
+	protected static final Logger log = LoggerFactory
+			.getLogger(QSQEvaluateQuery.class);
+
 	public static final int I_QUERY_ID = 0;
+	public static final int B_FILTER = 1;
 
 	private int id;
 	private InMemoryTripleContainer outputContainer;
+	private InMemoryTripleContainer existingDerivation;
 	private long previousSize;
+	private boolean filter;
 
 	@Override
 	protected void registerActionParameters(ActionConf conf) {
-		conf.registerParameter(I_QUERY_ID, "I_QUERY_ID", -1, false);
+		conf.registerParameter(I_QUERY_ID, "I_QUERY_ID", -1, true);
+		conf.registerParameter(B_FILTER, "B_FILTER", false, false);
 	}
 
 	@Override
 	public void startProcess(ActionContext context) throws Exception {
 		id = getParamInt(I_QUERY_ID);
-		outputContainer = null;
+		filter = getParamBoolean(B_FILTER);
+		outputContainer = new InMemoryTripleContainer();
 		previousSize = 0;
+		existingDerivation = (InMemoryTripleContainer) context
+				.getObjectFromCache("inputIntermediateTuples");
 	}
 
 	@Override
 	public void process(Tuple tuple, ActionContext context,
 			ActionOutput actionOutput) throws Exception {
-		// Collect all the triples in a temporary container
-		if (outputContainer == null) {
-			outputContainer = (InMemoryTripleContainer) context
-					.getObjectFromCache("qsq-" + id);
-			if (outputContainer == null) {
-				outputContainer = new InMemoryTripleContainer();
-				context.putObjectInCache("qsq-" + id, outputContainer);
-			}
-			previousSize = outputContainer.size();
-		}
-
-		if (outputContainer.addTriple((RDFTerm) tuple.get(0),
-				(RDFTerm) tuple.get(1), (RDFTerm) tuple.get(2), null)) {
+		boolean derived = ((TBoolean) tuple.get(3)).getValue();
+		if ((!derived && !filter)
+				|| outputContainer.addTriple((RDFTerm) tuple.get(0),
+						(RDFTerm) tuple.get(1), (RDFTerm) tuple.get(2),
+						existingDerivation)) {
 			actionOutput.output(tuple);
 		}
 	}
@@ -68,47 +73,91 @@ public class QSQEvaluateQuery extends Action {
 	@Override
 	public void stopProcess(ActionContext context, ActionOutput actionOutput)
 			throws Exception {
-		// Should I repeat the process?
-		if (outputContainer != null && outputContainer.size() != previousSize) {
-			ActionSequence actions = new ActionSequence();
-			Tree t = (Tree) context.getObjectFromCache(QSQBCAlgo.TREE_ID);
-			evaluateQuery(actions, t, t.getQuery(id), false, context);
-			actionOutput.branch(actions);
-		} else {
-			context.putObjectInCache("qsq-" + id, null);
-			Tree t = (Tree) context.getObjectFromCache(QSQBCAlgo.TREE_ID);
-			QueryNode q = t.getQuery(id);
-			q.setComputed();
+		// Should I repeat the process? If query id is 0 (root), check also that
+		// no more triple has been derived
+		final Tree t = (Tree) context.getObjectFromCache(QSQBCAlgo.TREE_ID);
+		QueryNode query = t.getQuery(id);
 
-			// Copy the data to the intermediate container used by RDFStorage
-			if (outputContainer == null) {
-				outputContainer = (InMemoryTripleContainer) context
-						.getObjectFromCache("qsq-" + id);
-			}
-			if (outputContainer != null && outputContainer.size() > 0) {
-				InMemoryTripleContainer intermediateTriples = (InMemoryTripleContainer) context
-						.getObjectFromCache("inputIntermediateTuples");
-				if (intermediateTriples == null) {
-					intermediateTriples = outputContainer;
-					context.putObjectInCache("inputIntermediateTuples",
-							intermediateTriples);
-				} else {
-					intermediateTriples.addAll(outputContainer);
+		boolean shouldRepeat = outputContainer != null
+				&& outputContainer.size() != previousSize;
+		if (query.getId() == 0) {
+			// Check also that no intermediate derivations have been produced
+			if (existingDerivation != null) {
+				if (!shouldRepeat) {
+					Long previousSize = (Long) context
+							.getObjectFromCache("previousDerivation");
+					if (previousSize == null) {
+						previousSize = new Long(0);
+					}
+					shouldRepeat = existingDerivation.size() != previousSize;
 				}
-				// add the query
-				intermediateTriples.addQuery(q.s, q.p, q.o, context, null);
-				intermediateTriples.index();
 			}
 		}
+
+		if (shouldRepeat) {
+			// Index the intermediate data
+			// Copy the data to the intermediate container used by RDFStorage
+			t.markAsUpdatedAllSimilarQueries(context);
+			t.resetUpdateCounters();
+			if (outputContainer.size() > 0) {
+				if (existingDerivation == null) {
+					existingDerivation = outputContainer;
+					existingDerivation.index();
+					context.putObjectInCache("inputIntermediateTuples",
+							existingDerivation);
+				} else {
+					existingDerivation.addAllIndexed(outputContainer);
+				}
+			}
+
+			if (query.getId() == 0)
+				context.putObjectInCache("previousDerivation", new Long(
+						existingDerivation.size()));
+
+			final ActionSequence actions = new ActionSequence();
+			if (query.getId() == 0) {
+				// cleanupCache(context); //Conflicts with SPARQL
+				evaluateRootQuery(actions, query.getS(), query.p, query.o,
+						context);
+			} else {
+				evaluateQuery(actions, t, query, false, context);
+			}
+			actionOutput.branch(actions);
+		} else {
+			query.setComputed();
+			log.debug("Finished computing query " + query);
+		}
+
 		outputContainer = null;
+		existingDerivation = null;
+	}
+
+	public static final void cleanupCache(ActionContext context) {
+		// Cleanup the cache
+		List<Long> toRemove = new ArrayList<>();
+		for (Object obj : context.getAllObjectsFromCache()) {
+			if (obj instanceof Long) {
+				Long l = (Long) obj;
+				if (l < RDFTerm.THRESHOLD_VARIABLE - 100) { // -100 is an hack
+					// to make sure that
+					// the SPARQL
+					// variables are not
+					// being cleaned up.
+					toRemove.add(l);
+				}
+			}
+		}
+		for (Long el : toRemove) {
+			context.removeFromCache(el);
+		}
 	}
 
 	public static final void evaluateRootQuery(ActionSequence actions, long v1,
 			long v2, long v3, ActionContext context) throws Exception {
 
-		Tree t = new Tree();
-		QueryNode q = t.newQuery(null);
-		q.s = v1;
+		final Tree t = new Tree();
+		final QueryNode q = t.newQuery(null);
+		q.setS(v1);
 		q.p = v2;
 		q.o = v3;
 		context.putObjectInCache(QSQBCAlgo.TREE_ID, t);
@@ -117,39 +166,39 @@ public class QSQEvaluateQuery extends Action {
 
 	public static final void evaluateQuery(ActionSequence actions, Tree t,
 			QueryNode q, boolean explicit, ActionContext context)
-			throws Exception {
-
+					throws Exception {
 		// 1- Expand the query
 		if (!q.isExpanded() && !q.isComputed(context)) {
-			TreeExpander.expandQuery(context, q, t, TreeExpander.ALL);
+			TreeExpander.expandQuery(context, q, t, TreeExpander.ALL, null);
 			q.setExpanded();
 		}
 
 		if (explicit) {
-			if (q.s == Schema.SCHEMA_SUBSET) {
-				ActionConf c = ActionFactory
+			if (q.getS() == Schema.SCHEMA_SUBSET) {
+				final ActionConf c = ActionFactory
 						.getActionConf(QueryInputLayer.class);
 				c.setParamString(QueryInputLayer.S_INPUTLAYER,
 						DummyLayer.class.getName());
 				c.setParamWritable(
 						QueryInputLayer.W_QUERY,
 						new nl.vu.cs.ajira.actions.support.Query(TupleFactory
-								.newTuple(new RDFTerm(q.s), new RDFTerm(q.p),
-										new RDFTerm(q.o), new TInt(q.getId()))));
+								.newTuple(new RDFTerm(q.getS()), new RDFTerm(
+										q.p), new RDFTerm(q.o),
+										new TInt(q.getId()))));
 				actions.add(c);
 			} else { // Read from the default layer
 				ReasoningUtils.getResultsQuery(actions, TupleFactory.newTuple(
-						new RDFTerm(q.s), new RDFTerm(q.p), new RDFTerm(q.o)),
-						false);
+						new RDFTerm(q.getS()), new RDFTerm(q.p), new RDFTerm(
+								q.o)), false);
 				actions.add(ActionFactory.getActionConf(SetAsExplicit.class));
 			}
 		} else {
-			QueryNode child = (QueryNode) q.child.child;
-			applyRule(actions, t, q, (RuleNode) q.child, child,
-					child.list_head, child.list_id, context);
+			final QueryNode child = (QueryNode) q.child.child;
+			applyRule(actions, t, q, (RuleNode) q.child, child, child.list_id,
+					((RuleNode) q.child).idFilterValues, context);
 		}
 
-		boolean shouldRepeat = !q.isComputed(context) && q.child != null;
+		final boolean shouldRepeat = !q.isComputed(context) && q.child != null;
 		if (shouldRepeat) {
 			// Add the move to sibling action (if there are siblings)
 			if (explicit) {
@@ -157,6 +206,7 @@ public class QSQEvaluateQuery extends Action {
 				c.setParamStringArray(CollectToNode.SA_TUPLE_FIELDS,
 						RDFTerm.class.getName(), RDFTerm.class.getName(),
 						RDFTerm.class.getName(), TBoolean.class.getName());
+				// c.setParamBoolean(CollectToNode.B_SORT, true);
 				actions.add(c);
 
 				c = ActionFactory.getActionConf(QSQMoveNextSibling.class);
@@ -168,6 +218,7 @@ public class QSQEvaluateQuery extends Action {
 				c.setParamStringArray(CollectToNode.SA_TUPLE_FIELDS,
 						RDFTerm.class.getName(), RDFTerm.class.getName(),
 						RDFTerm.class.getName(), TBoolean.class.getName());
+				// c.setParamBoolean(CollectToNode.B_SORT, true);
 				actions.add(c);
 
 				c = ActionFactory.getActionConf(QSQMoveNextSibling.class);
@@ -182,45 +233,49 @@ public class QSQEvaluateQuery extends Action {
 			c.setParamStringArray(CollectToNode.SA_TUPLE_FIELDS,
 					RDFTerm.class.getName(), RDFTerm.class.getName(),
 					RDFTerm.class.getName(), TBoolean.class.getName());
+			c.setParamBoolean(CollectToNode.B_SORT, true);
 			actions.add(c);
 
 			// Repeat the process adding QSQAlgo
 			c = ActionFactory.getActionConf(QSQEvaluateQuery.class);
 			c.setParamInt(I_QUERY_ID, q.getId());
+			if (q.getId() == 0)
+				c.setParamBoolean(B_FILTER, true);
 			actions.add(c);
 		} else {
 			// Mark it as computed
 			if (!q.isComputed(context)) {
 				q.setComputed();
 			}
-			
-			//This query was either being computed or no reasoning could be applied. In the second case,
-			//A query to the datalayer might return some duplicates that we need to remove.
+
+			// This query was either being computed or no reasoning could be
+			// applied. In the second case,
+			// A query to the datalayer might return some duplicates that we
+			// need to remove.
 			ActionConf c = ActionFactory.getActionConf(CollectToNode.class);
 			c.setParamStringArray(CollectToNode.SA_TUPLE_FIELDS,
 					RDFTerm.class.getName(), RDFTerm.class.getName(),
 					RDFTerm.class.getName(), TBoolean.class.getName());
-			c.setParamBoolean(CollectToNode.B_SORT, true);			
+			c.setParamBoolean(CollectToNode.B_SORT, true);
 			actions.add(c);
-			
+
 			c = ActionFactory.getActionConf(RemoveDuplicates.class);
 			actions.add(c);
 		}
 	}
 
 	public static final void applyRule(ActionSequence newChain, Tree tree,
-			QueryNode head, RuleNode rule, QueryNode query, long list_head,
-			int list_id, ActionContext context) throws Exception {
+			QueryNode head, RuleNode rule, QueryNode query, int list_id,
+			int idFilterValues, ActionContext context) throws Exception {
 		applyRule(newChain, tree, head, rule.rule, rule.single_node,
-				rule.strag_id, rule.ref_memory, rule.current_pattern, query,
-				list_head, list_id, context);
+				rule.strag_id, query.current_pattern, query, list_id,
+				idFilterValues, context);
 	}
 
 	public static final void applyRule(ActionSequence newChain, Tree tree,
 			QueryNode head, Rule rule, boolean single_node, int strag_id,
-			int ref_memory, int current_pattern, QueryNode query,
-			long list_head, int list_id, ActionContext context)
-			throws Exception {
+			int current_pattern, QueryNode query, int list_id,
+			int idFilterValues, ActionContext context) throws Exception {
 
 		evaluateQuery(newChain, tree, query, true, context);
 
@@ -229,6 +284,7 @@ public class QSQEvaluateQuery extends Action {
 			c.setParamStringArray(CollectToNode.SA_TUPLE_FIELDS,
 					RDFTerm.class.getName(), RDFTerm.class.getName(),
 					RDFTerm.class.getName(), TBoolean.class.getName());
+			c.setParamBoolean(CollectToNode.B_SORT, true);
 			newChain.add(c);
 
 			c = ActionFactory.getActionConf(QSQMoveNextSibling.class);
@@ -238,30 +294,18 @@ public class QSQEvaluateQuery extends Action {
 		}
 
 		if (single_node) {
-			ActionConf c = ActionFactory.getActionConf(CollectToNode.class);
+			final ActionConf c = ActionFactory
+					.getActionConf(CollectToNode.class);
 			c.setParamStringArray(CollectToNode.SA_TUPLE_FIELDS,
 					RDFTerm.class.getName(), RDFTerm.class.getName(),
 					RDFTerm.class.getName(), TBoolean.class.getName());
+			c.setParamBoolean(CollectToNode.B_SORT, true);
 			newChain.add(c);
 		}
 
-		ActionConf c = ActionFactory
-				.getActionConf(ReasoningUtils.ruleClasses[rule.type].getName());
-		c.setParamInt(RuleExecutor1.I_RULEDEF, rule.id);
-		c.setParamLong(RuleExecutor1.L_FIELD1, head.s);
-		c.setParamLong(RuleExecutor1.L_FIELD2, head.p);
-		c.setParamLong(RuleExecutor1.L_FIELD3, head.o);
-		if (rule.type > 2) {
-			c.setParamInt(RuleExecutor3.I_STRAG_ID, strag_id);
-			c.setParamInt(RuleExecutor3.I_KEY, ref_memory);
-			c.setParamInt(RuleExecutor3.I_PATTERN_POS, current_pattern);
-			c.setParamInt(RuleExecutor3.I_QUERY_ID, query.getId());
-		}
-		if (rule.type == 4) {
-			c.setParamLong(RuleExecutor4.L_LIST_HEAD, list_head);
-			c.setParamInt(RuleExecutor4.I_LIST_CURRENT, list_id);
-		}
-		newChain.add(c);
+		ReasoningUtils.applyRule(newChain, rule, head, query, strag_id,
+				current_pattern, QSQBCAlgo.TREE_ID, list_id, idFilterValues,
+				TreeExpander.ALL);
 
 	}
 }

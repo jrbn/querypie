@@ -16,4 +16,4 @@ esac
 
 export IBIS_OPTS="-Dibis.server.address=localhost:8011 -Dibis.pool.name=$pool"
 
-java $JAVA_OPTS $IBIS_OPTS nl.vu.cs.querypie.Query $*
+java $JAVA_OPTS $IBIS_OPTS nl.vu.cs.querypie.Query --optimal $*

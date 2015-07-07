@@ -49,7 +49,7 @@ public class QSQMoveNextSibling extends Action {
 			RuleNode rn = tree.getRule(nodeId);
 			QueryNode query = (QueryNode) rn.child;
 			QSQEvaluateQuery.applyRule(actions, tree, (QueryNode) rn.parent,
-					rn, query, query.list_head, query.list_id, context);
+					rn, query, query.list_id, rn.idFilterValues, context);
 
 			if (rn.sibling != null) {
 				ActionConf c = ActionFactory.getActionConf(CollectToNode.class);

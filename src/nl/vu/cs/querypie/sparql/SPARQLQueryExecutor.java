@@ -14,6 +14,7 @@ import nl.vu.cs.ajira.data.types.Tuple;
 import nl.vu.cs.querypie.joins.HashJoin;
 import nl.vu.cs.querypie.joins.Table;
 import nl.vu.cs.querypie.reasoner.IncrRuleBCAlgo;
+import nl.vu.cs.querypie.reasoner.OptimalBCAlgo;
 import nl.vu.cs.querypie.reasoner.QSQBCAlgo;
 import nl.vu.cs.querypie.reasoner.RuleBCAlgo;
 import nl.vu.cs.querypie.reasoning.expand.ExpandTree;
@@ -26,13 +27,17 @@ public class SPARQLQueryExecutor extends Action {
 	public static final int LA_NAMEEXIST = 1;
 	public static final int LA_NAMESETS = 2;
 	public static final int IA_POSSETS = 3;
-	public static final int B_QSQ = 4;
+	public static final int I_ALGO = 4;
+
+        public static final int ALGO_QSQ = 1;
+        public static final int ALGO_OPTIMAL = 2;
+        public static final int ALGO_PAR_QSQ = 3;
 
 	private long[] existingTable;
 	private long[] remainingPatterns;
 	private long[] nameSets;
 	private int[] posSets;
-	private boolean qsq;
+	private int algo;
 
 	@Override
 	protected void registerActionParameters(ActionConf conf) {
@@ -40,7 +45,7 @@ public class SPARQLQueryExecutor extends Action {
 		conf.registerParameter(LA_NAMEEXIST, "LA_NAMEEXIST", null, false);
 		conf.registerParameter(LA_NAMESETS, "LA_NAMESETS", null, false);
 		conf.registerParameter(IA_POSSETS, "IA_POSSETS", null, false);
-		conf.registerParameter(B_QSQ, "B_QSQ", null, true);
+		conf.registerParameter(I_ALGO, "I_ALGO", null, true);
 	}
 
 	@Override
@@ -49,7 +54,7 @@ public class SPARQLQueryExecutor extends Action {
 		remainingPatterns = getParamLongArray(LA_NAMEREST);
 		nameSets = getParamLongArray(LA_NAMESETS);
 		posSets = getParamIntArray(IA_POSSETS);
-		qsq = getParamBoolean(B_QSQ);
+		algo = getParamInt(I_ALGO);
 	}
 
 	@Override
@@ -72,13 +77,13 @@ public class SPARQLQueryExecutor extends Action {
 		}
 
 		/***** PREPARE THE PATTERN TO READ *****/
-		int nvars = 0;
+		// int nvars = 0;
 		ActionSequence newChain = new ActionSequence();
 		RDFTerm[] t2 = { new RDFTerm(), new RDFTerm(), new RDFTerm() };
 		for (int m = 0; m < 3; ++m) {
 			if (remainingPatterns[m] < 0) {
 				t2[m].setValue(Schema.ALL_RESOURCES);
-				nvars++;
+				// nvars++;
 			} else {
 				t2[m].setValue(remainingPatterns[m]);
 			}
@@ -91,19 +96,24 @@ public class SPARQLQueryExecutor extends Action {
 		}
 
 		/***** READ THE PATTERN *****/
-		boolean incrementalExecution = nvars == 1 && nameSets != null
-				&& nameSets.length == 1;
+		// boolean incrementalExecution = nvars == 1 && nameSets != null
+		// && nameSets.length == 1;
+		boolean incrementalExecution = false;
 		if (incrementalExecution) {
 			context.putObjectInCache(ExpandTree.FINISHED_EXPANSION, null);
 			IncrRuleBCAlgo.applyTo(t2[0], t2[1], t2[2], posSets[0],
 					nameSets[0], newChain);
 		} else {
-			if (qsq) {
-				QSQBCAlgo.applyTo(t2[0], t2[1], t2[2], newChain);
-			} else {
+			if (algo == ALGO_PAR_QSQ) {
 				RuleBCAlgo.cleanup(context);
-				RuleBCAlgo.applyTo(t2[0], t2[1], t2[2], true, newChain);	
-			}			
+				RuleBCAlgo.applyTo(t2[0], t2[1], t2[2], true, newChain);
+                        } else if (algo == ALGO_OPTIMAL) {
+				RuleBCAlgo.cleanup(context);
+				OptimalBCAlgo.applyTo(t2[0], t2[1], t2[2], true, newChain);
+                        } else {
+                                // ALGO_QSQ
+				QSQBCAlgo.applyTo(t2[0], t2[1], t2[2], newChain);
+                        }
 		}
 
 		/***** COLLECT ALL THE RESULTS BEFORE WE CONTINUE WITH ANOTHER PATTERN *****/
@@ -132,7 +142,7 @@ public class SPARQLQueryExecutor extends Action {
 					.getObjectFromCache("existingTable");
 			if (previousTuples == null || previousTuples.size() == 0) {
 				return; // No more joins to perform, since the previous patterns
-						// did not retrieve anything.
+				// did not retrieve anything.
 			}
 
 			int[][] positions = calculateJoinsAndPositionsToCopy(existingTable,
@@ -180,7 +190,7 @@ public class SPARQLQueryExecutor extends Action {
 			c.setParamLongArray(LA_NAMEEXIST, existingTable);
 			c.setParamLongArray(LA_NAMESETS, nameSets);
 			c.setParamIntArray(IA_POSSETS, nextJoins[1]);
-			c.setParamBoolean(B_QSQ, qsq);
+			c.setParamInt(I_ALGO, algo);
 			newChain.add(c);
 
 		} else {

@@ -277,8 +277,8 @@ public class Ruleset {
 		}
 	}
 	
-	public void setQsqEvaluation() {
-		qsq = true;
+	public void setQsqEvaluation(boolean value) {
+		qsq = value;
 	}
 	
 	public boolean getQSQEvaluation() {

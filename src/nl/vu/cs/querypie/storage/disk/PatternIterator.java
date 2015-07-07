@@ -865,8 +865,10 @@ public class PatternIterator extends TupleIterator implements TripleIterator {
 				// Do nothing. At max it is one
 			} else {
 				// This can happen only if there are special sets. However, at
-				// the beginning we don't have any
-				throw new Exception("Not supported");
+				// the beginning we don't have any.
+                                // Not true with a query that gets expanded during the estimation. --Ceriel
+				// throw new Exception("Not supported: entry2 = " + entry2 + ", entry3 = " + entry3);
+				// Do nothing.
 			}
 		} else {
 			if (entry2 == Schema.ALL_RESOURCES
@@ -893,7 +895,9 @@ public class PatternIterator extends TupleIterator implements TripleIterator {
 			} else {
 				// This can happen only if there are special sets. However, at
 				// the beginning we don't have any
-				throw new Exception("Not supported");
+                                // Not true with a query that gets expanded during the estimation. --Ceriel
+				// throw new Exception("Not supported: entry2 = " + entry2 + ", entry3 = " + entry3);
+				// Do nothing.
 			}
 		}
 		if (output > Integer.MAX_VALUE) {

@@ -1,6 +1,5 @@
 #!/bin/bash
 
-
 if [ $# -lt 2 ];
 then
 echo "Usage: convertHDFSFiles.sh <absolute input dir> <absolute ouput dir>"
@@ -29,7 +28,7 @@ INDEXES="spo sop pos ops pso osp"
 for INDEX in $INDEXES; do
     echo "process index $INDEX ..."
     mkdir "${INDEX_DIR}/${INDEX}"
-    cp -R ${1}/_index/${INDEX}/index/* ${INDEX_DIR}/${INDEX}
+    find ${1}/_index/${INDEX}/index -type f -print | xargs ./docopy ${1}/_index/${INDEX}/index ${INDEX_DIR}/${INDEX}
 done
 
 echo ""

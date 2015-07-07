@@ -20,6 +20,8 @@ import nl.vu.cs.ajira.exceptions.ActionNotConfiguredException;
 import nl.vu.cs.querypie.reasoning.expand.ExpandQuery;
 import nl.vu.cs.querypie.storage.RDFTerm;
 import nl.vu.cs.querypie.storage.memory.InMemoryTripleContainer;
+import nl.vu.cs.querypie.storage.memory.Triple;
+import nl.vu.cs.querypie.utils.TripleBuffer;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -48,7 +50,7 @@ public class RuleBCAlgo extends Action {
 
 	public static void applyTo(RDFTerm v1, RDFTerm v2, RDFTerm v3,
 			boolean explicit, ActionSequence actions)
-			throws ActionNotConfiguredException {
+					throws ActionNotConfiguredException {
 
 		ActionConf c = ActionFactory.getActionConf(QueryInputLayer.class);
 		c.setParamString(QueryInputLayer.S_INPUTLAYER,
@@ -61,6 +63,7 @@ public class RuleBCAlgo extends Action {
 
 		c = ActionFactory.getActionConf(ExpandQuery.class);
 		c.setParamBoolean(ExpandQuery.B_EXPLICIT, explicit);
+		c.setParamBoolean(ExpandQuery.B_FORCERESTART, true);
 		actions.add(c);
 
 		c = ActionFactory.getActionConf(CollectToNode.class);
@@ -69,8 +72,8 @@ public class RuleBCAlgo extends Action {
 				RDFTerm.class.getName(), TBoolean.class.getName());
 		actions.add(c);
 
-		AddIntermediateTriples.applyTo(v1.getValue(), v2.getValue(),
-				v3.getValue(), actions);
+		// AddIntermediateTriples.applyTo(v1.getValue(), v2.getValue(),
+		// v3.getValue(), actions);
 
 		c = ActionFactory.getActionConf(RuleBCAlgo.class);
 		c.setParamLong(L_FIELD1, v1.getValue());
@@ -104,21 +107,26 @@ public class RuleBCAlgo extends Action {
 		}
 	}
 
-	public static final InMemoryTripleContainer[] collectIntermediateData(
+	@SuppressWarnings("unchecked")
+	public static final List<TripleBuffer> collectIntermediateData(
 			ActionContext context) {
 		// Get local data structures
-		InMemoryTripleContainer triples = (InMemoryTripleContainer) context
+		List<TripleBuffer> triples = (List<TripleBuffer>) context
 				.getObjectFromCache("intermediateTuples");
-		InMemoryTripleContainer explicitTriples = (InMemoryTripleContainer) context
-				.getObjectFromCache("explicitIntermediateTuples");
+		// InMemoryTripleContainer explicitTriples = (InMemoryTripleContainer)
+		// context
+		// .getObjectFromCache("explicitIntermediateTuples");
 
 		// Retrieve current inferred and explicit triples
-		List<Object[]> remoteObjs = context.retrieveCacheObjects(
-				"intermediateTuples", "explicitIntermediateTuples");
+		List<Object[]> remoteObjs = context
+				.retrieveCacheObjects("intermediateTuples"/*
+				 * ,
+				 * "explicitIntermediateTuples"
+				 */);
 		if (remoteObjs != null) {
 			for (Object[] values : remoteObjs) {
 				// Inferred
-				InMemoryTripleContainer v = (InMemoryTripleContainer) values[0];
+				List<TripleBuffer> v = (List<TripleBuffer>) values[0];
 				if (v != null && v.size() > 0) {
 					if (triples == null) {
 						triples = v;
@@ -126,73 +134,84 @@ public class RuleBCAlgo extends Action {
 						triples.addAll(v);
 					}
 				}
-
-				// Explicit
-				v = (InMemoryTripleContainer) values[1];
-				if (v != null && v.size() > 0) {
-					if (explicitTriples == null) {
-						explicitTriples = v;
-					} else {
-						explicitTriples.addAll(v);
-					}
-				}
+				//
+				// // Explicit
+				// v = (InMemoryTripleContainer) values[1];
+				// if (v != null && v.size() > 0) {
+				// if (explicitTriples == null) {
+				// explicitTriples = v;
+				// } else {
+				// explicitTriples.addAll(v);
+				// }
+				// }
 			}
 		}
 
-		// Remove eventual inferred triples that are explicit in DB
-		if (explicitTriples != null && triples != null) {
-			triples.removeAll(explicitTriples);
-		}
+		// // Remove eventual inferred triples that are explicit in DB
+		// if (explicitTriples != null && triples != null) {
+		// triples.removeAll(explicitTriples);
+		// }
 
-		InMemoryTripleContainer[] output = new InMemoryTripleContainer[2];
-		output[0] = triples;
-		output[1] = explicitTriples;
-		return output;
+		// InMemoryTripleContainer[] output = new InMemoryTripleContainer[2];
+		// output[0] = triples;
+		// output[1] = explicitTriples;
+		return triples;
 	}
 
 	public static final void calculateIntermediateTriplesForNextRound(
-			ActionContext context, InMemoryTripleContainer triples,
-			InMemoryTripleContainer explicitTriples) throws IOException {
+			ActionContext context, List<TripleBuffer> triples) throws Exception {
+
 		InMemoryTripleContainer previousTriples = (InMemoryTripleContainer) context
 				.getObjectFromCache("inputIntermediateTuples");
 		if (previousTriples != null) {
-			if (explicitTriples != null || triples != null) {
-				if (explicitTriples != null)
-					previousTriples.addAll(explicitTriples);
-				if (triples != null)
-					previousTriples.addAll(triples);
-				previousTriples.index();
+			if (triples != null) {
+
+				for (TripleBuffer b : triples) {
+					int size = b.getNElements();
+					for (int i = 0; i < size; ++i) {
+						long[] rawTriple = b.get(i);
+						Triple triple = new Triple();
+						triple.subject = rawTriple[0];
+						triple.predicate = rawTriple[1];
+						triple.object = rawTriple[2];
+						previousTriples.addIndexedTriple(triple);
+					}
+				}
 			}
-		} else if (triples != null) {   // Ceriel: added this test, because this
-                                                // case happened. Should this be possible?
-                                                // When it happened, explicitTriples was null.
-                                                // TODO!
-			if (explicitTriples != null)
-				triples.addAll(explicitTriples);
-			context.putObjectInCache("inputIntermediateTuples", triples);
-			triples.index();
+		} else if (triples != null) {
+			InMemoryTripleContainer output = new InMemoryTripleContainer();
+			for (TripleBuffer b : triples) {
+				int size = b.getNElements();
+				for (int i = 0; i < size; ++i) {
+					long[] rawTriple = b.get(i);
+					Triple triple = new Triple();
+					triple.subject = rawTriple[0];
+					triple.predicate = rawTriple[1];
+					triple.object = rawTriple[2];
+					output.addTriple(triple, null);
+				}
+			}
+			output.index();
+			context.putObjectInCache("inputIntermediateTuples", output);
 		}
 		context.putObjectInCache("intermediateTuples", null);
-		context.putObjectInCache("explicitIntermediateTuples", null);
-
 		context.broadcastCacheObjects("inputIntermediateTuples",
-				"intermediateTuples", "explicitIntermediateTuples");
+				"intermediateTuples");
 	}
 
 	@Override
 	public void stopProcess(ActionContext context, ActionOutput output)
 			throws Exception {
-		InMemoryTripleContainer[] collectedTriples = collectIntermediateData(context);
-		InMemoryTripleContainer triples = collectedTriples[0];
-		InMemoryTripleContainer explicitTriples = collectedTriples[1];
+		List<TripleBuffer> triples = collectIntermediateData(context);
+		// InMemoryTripleContainer triples = collectedTriples[0];
+		// InMemoryTripleContainer explicitTriples = collectedTriples[1];
 
 		if (triples != null)
 			context.incrCounter("total results", triples.size());
 
 		// Check whether I need to relaunch the query
 		if (triples != null && triples.size() > 0) {
-			calculateIntermediateTriplesForNextRound(context, triples,
-					explicitTriples);
+			calculateIntermediateTriplesForNextRound(context, triples);
 
 			/***** Repeat reasoning *****/
 			ActionSequence seq = new ActionSequence();
@@ -201,14 +220,15 @@ public class RuleBCAlgo extends Action {
 							getParamLong(L_FIELD3)), explicit, seq);
 			output.branch(seq);
 		} else {
-			if (explicitTriples != null)
-				context.incrCounter("total results", explicitTriples.size());
+			// if (explicitTriples != null)
+			// context.incrCounter("total results", explicitTriples.size());
 		}
 		outputContainer = null;
 	}
 
 	public static void cleanup(ActionContext context) throws IOException {
 		context.putObjectInCache("tree", null);
+		context.putObjectInCache("queue", null);
 		context.putObjectInCache("intermediateTuples", null);
 		context.putObjectInCache("inputIntermediateTuples", null);
 		context.putObjectInCache("outputSoFar", null);

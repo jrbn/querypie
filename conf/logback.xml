@@ -18,7 +18,7 @@
 <appender-ref ref="STDOUT" />
 </root>
 
-<logger name="nl.vu.cs.querypie">
+<logger name="nl.vu.cs.ajira">
 <level value="info" />
 </logger>
 

@@ -21,10 +21,7 @@ INPUT_DIR=${2}
 
 while (( "$#" )); do
 
-if [[ ${1} == "--reserve" ]]; then
-shift
-RESERVATION="-reserve ${1}"
-elif [[ ${1} == "--cleanCache" ]]; then
+if [[ ${1} == "--cleanCache" ]]; then
 CLEAN="--clean-cache"
 elif [[ ${1} == "--cachingIterator" ]]; then
 CACHING_ITER="--caching-iterator"
@@ -50,4 +47,4 @@ IBIS_OPTS="-Dibis.pool.name=$POOL_NAME -Dibis.server.address=$IBIS_SERVER -Dibis
 echo "Pool name = $POOL_NAME"
 
 #Launch the program
-java $JAVA_OPTS $IBIS_OPTS  -Drules.list=$RULES nl.vu.cs.querypie.QueryPIE $INPUT_DIR --n-proc-threads 1 $CACHE $CLEAN $CACHE_URLS $JAVAGAT $CACHING_ITER > out-querypie 2>&1
+java $JAVA_OPTS $IBIS_OPTS -Drules.list=$RULES nl.vu.cs.querypie.QueryPIE $INPUT_DIR --n-proc-threads 4 $CACHE $CLEAN $CACHE_URLS $JAVAGAT $CACHING_ITER > out-querypie 2>&1

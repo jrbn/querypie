@@ -24,6 +24,9 @@ public class Table {
 	}
 
 	public int size() {
+                if (sizeRow == 0) {
+                    return 0;
+                }
 		return idxRows / sizeRow;
 	}
 

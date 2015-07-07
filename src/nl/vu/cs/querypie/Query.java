@@ -26,6 +26,7 @@ import nl.vu.cs.ajira.exceptions.JobFailedException;
 import nl.vu.cs.ajira.submissions.Job;
 import nl.vu.cs.ajira.submissions.JobProperties;
 import nl.vu.cs.querypie.reasoner.CalculateClosure;
+import nl.vu.cs.querypie.reasoner.OptimalBCAlgo;
 import nl.vu.cs.querypie.reasoner.QSQBCAlgo;
 import nl.vu.cs.querypie.reasoner.ReasoningUtils;
 import nl.vu.cs.querypie.reasoner.RuleBCAlgo;
@@ -57,7 +58,9 @@ public class Query {
 	boolean closure = false;
 	boolean rules = false;
 	boolean incomplete = false;
-	boolean qsq = false;
+	int algo = SPARQLQueryExecutor.ALGO_PAR_QSQ;
+	boolean optimizeQuery = true;
+	boolean includeImplicitCardinality = true;
 
 	BufferedReader in;
 	PrintWriter out;
@@ -135,8 +138,13 @@ public class Query {
 				v3.setValue(Long.valueOf(values[2]));
 
 				if (rules) {
-					if (!qsq) {
+					if (algo == SPARQLQueryExecutor.ALGO_PAR_QSQ) {
+						log.info("Using Parallel QSQ algorithm");
 						RuleBCAlgo.applyTo(v1, v2, v3, !excludeExplicit,
+								actions);
+					} else if (algo == SPARQLQueryExecutor.ALGO_OPTIMAL) {
+						log.info("Using Optimal Algorithm");
+						OptimalBCAlgo.applyTo(v1, v2, v3, !excludeExplicit,
 								actions);
 					} else {
 						log.info("Using QSQ algorithm");
@@ -168,15 +176,25 @@ public class Query {
 
 				actions.add(ActionFactory.getActionConf(SPARQLParser.class));
 
-				c = ActionFactory.getActionConf(SPARQLQueryOptimizer.class);
-				c.setParamInt(SPARQLQueryOptimizer.I_MAX_LEVELS, 2);
-				actions.add(c);
+				if (optimizeQuery) {
+					c = ActionFactory.getActionConf(SPARQLQueryOptimizer.class);
+					c.setParamInt(SPARQLQueryOptimizer.I_MAX_LEVELS, 2);
+					if (!includeImplicitCardinality) {
+						c.setParamBoolean(
+								SPARQLQueryOptimizer.B_INCLUDE_IMPLICIT, false);
+					}
+					actions.add(c);
+				}
 
-				if (qsq) {
+				if (algo == SPARQLQueryExecutor.ALGO_PAR_QSQ) {
+					log.info("Using Parallel QSQ algorithm");
+				} else if (algo == SPARQLQueryExecutor.ALGO_OPTIMAL) {
+					log.info("Using Optimal Algorithm");
+				} else {
 					log.info("Using QSQ algorithm");
 				}
 				c = ActionFactory.getActionConf(SPARQLQueryExecutor.class);
-				c.setParamBoolean(SPARQLQueryExecutor.B_QSQ, qsq);
+				c.setParamInt(SPARQLQueryExecutor.I_ALGO, algo);
 				actions.add(c);
 
 				actions.add(ActionFactory
@@ -221,49 +239,33 @@ public class Query {
 			if (args[i].equals("-d")) {
 				dictionary = true;
 				dictionaryHost = args[++i];
-			}
-
-			if (args[i].equals("-cluster")) {
+			} else if (args[i].equals("-cluster")) {
 				cluster = args[++i];
-			}
-
-			if (args[i].equals("--excludeExplicit")) {
+			} else if (args[i].equals("--excludeExplicit")) {
 				excludeExplicit = true;
-			}
-
-			if (args[i].equals("--qsq")) {
-				qsq = true;
-			}
-
-			if (args[i].equals("--pattern")) {
+			} else if (args[i].equals("--excludeImplicitCardinality")) {
+				includeImplicitCardinality = false;
+			} else if (args[i].equals("--qsq")) {
+				algo = SPARQLQueryExecutor.ALGO_QSQ;
+			} else if (args[i].equals("--noQueryOptim")) {
+				optimizeQuery = false;
+			} else if (args[i].equals("--optimal")) {
+				algo = SPARQLQueryExecutor.ALGO_OPTIMAL;
+			} else if (args[i].equals("--pattern")) {
 				inputPattern = args[++i] + " " + args[++i] + " " + args[++i];
-			}
-
-			if (args[i].equals("--incomplete")) {
+			} else if (args[i].equals("--incomplete")) {
 				incomplete = true;
-			}
-
-			if (args[i].equals("--intermediateStats")) {
+			} else if (args[i].equals("--intermediateStats")) {
 				intermediateStats = true;
-			}
-
-			if (args[i].equals("--nResults")) {
+			} else if (args[i].equals("--nResults")) {
 				nDisplayResults = Integer.valueOf(args[++i]);
-			}
-
-			if (args[i].equals("--rules")) {
+			} else if (args[i].equals("--rules")) {
 				rules = true;
-			}
-
-			if (args[i].equals("--closure")) {
+			} else if (args[i].equals("--closure")) {
 				closure = true;
-			}
-
-			if (args[i].equals("--closurePath")) {
+			} else if (args[i].equals("--closurePath")) {
 				closurePath = args[++i];
-			}
-
-			if (args[i].equals("--sparql")) {
+			} else if (args[i].equals("--sparql")) {
 				fileSparqlQuery = args[++i];
 			}
 		}

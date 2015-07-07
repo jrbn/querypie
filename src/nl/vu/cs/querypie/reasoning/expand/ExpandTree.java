@@ -29,10 +29,16 @@ public class ExpandTree extends Action {
 		height = getParamInt(I_HEIGHT);
 	}
 
-	private ActionSequence getActionSequenceFromParents(ActionContext context,
-			QueryNode node) throws Exception {
+	static public ActionSequence getActionSequenceFromParents(
+			ActionContext context, QueryNode node) throws Exception {
+		ActionSequence sequence = new ActionSequence();
+		getActionSequenceFromParents(context, node, sequence);
+		return sequence;
+	}
+
+	static public void getActionSequenceFromParents(ActionContext context,
+			QueryNode node, ActionSequence parentSequence) throws Exception {
 		List<Node> parentNodes = getAllParentNodes(node);
-		ActionSequence parentSequence = new ActionSequence();
 		// Create a chain with all the parent rules
 		for (int j = parentNodes.size() - 2; j >= 0; j -= 2) {
 			RuleNode ruleNode = (RuleNode) parentNodes.get(j);
@@ -41,10 +47,10 @@ public class ExpandTree extends Action {
 			QueryNode child = (QueryNode) parentNodes.get(j - 1);
 			ReasoningUtils.generate_new_chain(parentSequence, rule,
 					ruleNode.strag_id, rule.type == 3 || rule.type == 4, child,
-					ruleNode.current_pattern, parent, ruleNode.ref_memory,
-					context, child.list_head, child.list_id, false, true);
+					child.current_pattern, parent, context, child.list_id,
+					false, true, TreeExpander.ALL, "tree",
+					ruleNode.idFilterValues);
 		}
-		return parentSequence;
 	}
 
 	@Override
@@ -60,7 +66,7 @@ public class ExpandTree extends Action {
 			if (node.height == height) {
 				// Expand it.
 				TreeExpander.expandQuery(context, node, tree,
-						TreeExpander.ONLY_FIRST_SECOND);
+						TreeExpander.ONLY_FIRST_SECOND, null);
 
 				if (node.child != null) {
 					// Translate all the children of this query in new chains to
@@ -78,15 +84,14 @@ public class ExpandTree extends Action {
 							// Add a new query
 							ActionSequence newSequence = new ActionSequence();
 							parentSequence.copyTo(newSequence);
-							ReasoningUtils
-									.generate_new_chain(parentSequence, rule,
-											ruleNode.strag_id, rule.type == 3
-													|| rule.type == 4, query,
-											ruleNode.current_pattern,
-											(QueryNode) ruleNode.parent,
-											ruleNode.ref_memory, context,
-											query.list_head, query.list_id,
-											false, true);
+							ReasoningUtils.generate_new_chain(parentSequence,
+									rule, ruleNode.strag_id, rule.type == 3
+											|| rule.type == 4, query,
+									query.current_pattern,
+									(QueryNode) ruleNode.parent, context,
+									query.list_id, false, true,
+									TreeExpander.ALL, "tree",
+									ruleNode.idFilterValues);
 							actionOutput.branch(newSequence);
 							query = (QueryNode) query.sibling;
 						}
@@ -105,7 +110,7 @@ public class ExpandTree extends Action {
 			for (int i = 0; i < nqueries; ++i) {
 				QueryNode node = tree.getQuery(i);
 				TreeExpander.expandQuery(context, node, tree,
-						TreeExpander.ONLY_THIRD_FOURTH);
+						TreeExpander.ONLY_THIRD_FOURTH, null);
 				RuleNode ruleNode = (RuleNode) (node.child != null ? node.child
 						: null);
 				ActionSequence parentSequence = null;
@@ -124,9 +129,9 @@ public class ExpandTree extends Action {
 						parentSequence.copyTo(newSequence);
 						ReasoningUtils.generate_new_chain(newSequence,
 								ruleNode.rule, ruleNode.strag_id, true, query,
-								ruleNode.current_pattern, node,
-								ruleNode.ref_memory, context, query.list_head,
-								query.list_id, true, true);
+								query.current_pattern, node, context,
+								query.list_id, true, true, TreeExpander.ALL,
+								"tree", ruleNode.idFilterValues);
 						actionOutput.branch(newSequence);
 
 						query = (QueryNode) query.sibling;
@@ -139,7 +144,7 @@ public class ExpandTree extends Action {
 
 	}
 
-	private List<Node> getAllParentNodes(QueryNode node) {
+	static public List<Node> getAllParentNodes(QueryNode node) {
 		ArrayList<Node> nodes = new ArrayList<Node>();
 		Node n = node;
 		while (n != null) {

@@ -1,6 +1,7 @@
 package nl.vu.cs.querypie.reasoner;
 
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 import nl.vu.cs.ajira.actions.Action;
@@ -19,8 +20,9 @@ import nl.vu.cs.ajira.datalayer.dummy.DummyLayer;
 import nl.vu.cs.ajira.exceptions.ActionNotConfiguredException;
 import nl.vu.cs.querypie.reasoning.expand.ExpandQuery;
 import nl.vu.cs.querypie.reasoning.expand.ExpandTree;
+import nl.vu.cs.querypie.reasoning.expand.TreeExpander;
 import nl.vu.cs.querypie.storage.RDFTerm;
-import nl.vu.cs.querypie.storage.memory.InMemoryTripleContainer;
+import nl.vu.cs.querypie.utils.TripleBuffer;
 
 public class IncrRuleBCAlgo extends Action {
 
@@ -33,7 +35,7 @@ public class IncrRuleBCAlgo extends Action {
 
 	public static final void applyTo(RDFTerm v1, RDFTerm v2, RDFTerm v3,
 			int posSet, long nameSet, ActionSequence actions)
-			throws ActionNotConfiguredException {
+					throws ActionNotConfiguredException {
 
 		// Get the query
 		ActionConf c = ActionFactory.getActionConf(QueryInputLayer.class);
@@ -48,7 +50,7 @@ public class IncrRuleBCAlgo extends Action {
 		// Expand it in incremental fashion
 		c = ActionFactory.getActionConf(ExpandQuery.class);
 		c.setParamBoolean(ExpandQuery.B_EXPLICIT, true);
-		c.setParamBoolean(ExpandQuery.B_ONLY_FIRST_AND_SECOND_RULES, true);
+		c.setParamInt(ExpandQuery.I_TYPE_RULES, TreeExpander.ONLY_FIRST_SECOND);
 		c.setParamBoolean(ExpandQuery.B_ALLOWRECURSION, false);
 		actions.add(c);
 
@@ -120,10 +122,10 @@ public class IncrRuleBCAlgo extends Action {
 			context.broadcastCacheObjects(nameSet);
 
 			if (!finishedExpansion) {
-				InMemoryTripleContainer[] intermediateTriples = RuleBCAlgo
+				List<TripleBuffer> triples = RuleBCAlgo
 						.collectIntermediateData(context);
 				RuleBCAlgo.calculateIntermediateTriplesForNextRound(context,
-						intermediateTriples[0], intermediateTriples[1]);
+						triples);
 
 				// Read a tuple from the dummy layer
 				ActionConf c = ActionFactory
@@ -163,14 +165,12 @@ public class IncrRuleBCAlgo extends Action {
 				c.setParamLong(L_FIELD3, getParamLong(L_FIELD3));
 				actions.add(c);
 			} else {
-				InMemoryTripleContainer[] intermediateTriples = RuleBCAlgo
+				List<TripleBuffer> triples = RuleBCAlgo
 						.collectIntermediateData(context);
-				InMemoryTripleContainer triples = intermediateTriples[0];
-				InMemoryTripleContainer explicitTriples = intermediateTriples[1];
 
 				if (triples != null && triples.size() > 0) {
 					RuleBCAlgo.calculateIntermediateTriplesForNextRound(
-							context, triples, explicitTriples);
+							context, triples);
 
 					// Continue using the traditional ruleBasedAlgo
 					RuleBCAlgo.applyTo(new RDFTerm(getParamLong(L_FIELD1)),
