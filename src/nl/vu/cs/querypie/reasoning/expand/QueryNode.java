@@ -242,9 +242,11 @@ public class QueryNode extends Node {
 			return true;
 		}
 		// One of the two terms is either ALL_RESOURCES or a set.
+                // No, could be SCHEMA_SUBSET as well. Added checks. --Ceriel
 		if (term1 >= 0) {
-			if (term2 >= 0) {
-				// we already know they are equal
+			if (term2 >= 0 || term2 == Schema.SCHEMA_SUBSET) {
+				// we already know they are not equal
+                                return false;
 			} else if (term2 != Schema.ALL_RESOURCES) {
 				final Collection<Long> set = Schema.getInstance().getSubset(
 						term2, context);
@@ -254,7 +256,9 @@ public class QueryNode extends Node {
 			if (term2 != Schema.ALL_RESOURCES) {
 				return false;
 			}
-		} else { // Here term1 is a set
+		} else if (term1 == Schema.SCHEMA_SUBSET) {
+                        return false;
+                } else { // Here term1 is a set
 			final Collection<Long> set = Schema.getInstance().getSubset(term1,
 					context);
 			if (term2 >= 0) {

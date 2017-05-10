@@ -69,7 +69,6 @@ public class OptimalBCAlgo extends Action {
 	public static void applyTo(RDFTerm v1, RDFTerm v2, RDFTerm v3,
 			boolean excludeExplicit, ActionSequence actions)
 					throws ActionNotConfiguredException {
-		Ruleset.getInstance().setQsqEvaluation(false);
 		applyTo(v1, v2, v3, excludeExplicit,
 				TreeExpander.ONLY_FIRST_SECOND_RECORD_OTHERS, 0, actions);
 	}
@@ -112,6 +111,7 @@ public class OptimalBCAlgo extends Action {
 
 	@Override
 	public void startProcess(ActionContext context) throws Exception {
+		Ruleset.getInstance().setQsqEvaluation(false);
 		outputContainer = (InMemoryTripleContainer) context
 				.getObjectFromCache("outputSoFar");
 		if (outputContainer == null) {
